@@ -26,6 +26,9 @@ async function main() {
 
     initializeDatabase();
 
+    // Start web server first so Railway health checks pass
+    startServer();
+
     const commands = await loadCommands(client);
     loadEvents(client);
 
@@ -34,10 +37,10 @@ async function main() {
     await client.login(config.token);
 
     setDiscordClient(client);
-    startServer();
+    logger.success('Bot fully initialized');
   } catch (error) {
     logger.error('Failed to start bot', error);
-    process.exit(1);
+    // Don't exit - keep web server running
   }
 }
 

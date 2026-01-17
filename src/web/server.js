@@ -117,7 +117,7 @@ function getDiscordClient() {
 
 function startServer(port = 3000) {
   const serverPort = process.env.PORT || port;
-  app.listen(serverPort, () => {
+  app.listen(serverPort, '0.0.0.0', () => {
     logger.success(`Dashboard running on port ${serverPort}`);
   });
 }
