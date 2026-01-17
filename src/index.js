@@ -21,13 +21,13 @@ const client = new Client({
 });
 
 async function main() {
+  logger.info('Starting Rabbit Bot...');
+
+  // Start web server IMMEDIATELY for Railway health checks
+  startServer();
+
   try {
-    logger.info('Starting Rabbit Bot...');
-
     initializeDatabase();
-
-    // Start web server first so Railway health checks pass
-    startServer();
 
     const commands = await loadCommands(client);
     loadEvents(client);
