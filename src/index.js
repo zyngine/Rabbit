@@ -3,6 +3,7 @@ const config = require('./config');
 const { initializeDatabase } = require('./database/db');
 const { loadCommands, registerCommands } = require('./handlers/commandHandler');
 const { loadEvents } = require('./handlers/eventHandler');
+const { startServer, setDiscordClient } = require('./web/server');
 const logger = require('./utils/logger');
 
 const client = new Client({
@@ -31,6 +32,9 @@ async function main() {
     await registerCommands(commands);
 
     await client.login(config.token);
+
+    setDiscordClient(client);
+    startServer();
   } catch (error) {
     logger.error('Failed to start bot', error);
     process.exit(1);

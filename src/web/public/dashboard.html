@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Rabbit</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="dashboard">
+    <aside class="sidebar">
+      <div class="logo">
+        <span class="logo-icon">🐰</span>
+        <span class="logo-text">Rabbit</span>
+      </div>
+
+      <div class="sidebar-section">
+        <h4>Servers</h4>
+        <div id="guild-list">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <h4>Navigation</h4>
+        <a href="#" class="sidebar-item active" data-page="overview">
+          <span>📊</span> Overview
+        </a>
+        <a href="#" class="sidebar-item" data-page="tickets">
+          <span>🎫</span> Tickets
+        </a>
+        <a href="#" class="sidebar-item" data-page="applications">
+          <span>📝</span> Applications
+        </a>
+        <a href="#" class="sidebar-item" data-page="settings">
+          <span>⚙️</span> Settings
+        </a>
+      </div>
+
+      <div class="sidebar-section" style="margin-top: auto;">
+        <a href="/logout" class="sidebar-item">
+          <span>🚪</span> Logout
+        </a>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1 id="page-title">Dashboard</h1>
+        <div class="user-menu">
+          <span id="username"></span>
+          <img id="user-avatar" class="user-avatar" src="" alt="Avatar">
+        </div>
+      </div>
+
+      <div id="content">
+        <div class="empty-state">
+          <div class="empty-state-icon">👈</div>
+          <p>Select a server from the sidebar</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>
