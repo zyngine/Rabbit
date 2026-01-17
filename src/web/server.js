@@ -23,6 +23,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api', apiRoutes);
 
+// Health check for Railway
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 app.get('/login', (req, res) => {
   const clientId = process.env.CLIENT_ID;
   const redirectUri = encodeURIComponent(process.env.DASHBOARD_URL + '/callback');
@@ -117,8 +122,14 @@ function getDiscordClient() {
 
 function startServer(port = 3000) {
   const serverPort = process.env.PORT || port;
-  app.listen(serverPort, '0.0.0.0', () => {
+  logger.info(`Starting web server on port ${serverPort}...`);
+
+  const server = app.listen(serverPort, '0.0.0.0', () => {
     logger.success(`Dashboard running on port ${serverPort}`);
+  });
+
+  server.on('error', (err) => {
+    logger.error(`Server error: ${err.message}`);
   });
 }
 
