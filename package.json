@@ -1,0 +1,26 @@
+{
+  "name": "rabbit-bot",
+  "version": "1.0.0",
+  "description": "A multi-server Discord bot with premium ticket system and application system",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "tickets",
+    "applications"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.1"
+  }
+}
