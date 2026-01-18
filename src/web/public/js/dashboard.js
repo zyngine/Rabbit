@@ -83,10 +83,22 @@ async function selectGuild(guildId, guilds) {
       fetch(`/api/guild/${guildId}/channels`),
       fetch(`/api/guild/${guildId}/roles`)
     ]);
-    guildChannels = await channelsRes.json();
-    guildRoles = await rolesRes.json();
+
+    if (channelsRes.ok) {
+      guildChannels = await channelsRes.json();
+    } else {
+      guildChannels = { textChannels: [], categories: [] };
+    }
+
+    if (rolesRes.ok) {
+      guildRoles = await rolesRes.json();
+    } else {
+      guildRoles = [];
+    }
   } catch (e) {
     console.error('Failed to load guild data:', e);
+    guildChannels = { textChannels: [], categories: [] };
+    guildRoles = [];
   }
 
   loadPage(currentPage);

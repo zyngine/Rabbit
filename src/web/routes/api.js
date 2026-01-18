@@ -58,10 +58,7 @@ router.get('/guild/:guildId/stats', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const guild = Guild.get(guildId);
-  if (!guild) {
-    return res.status(404).json({ error: 'Guild not found' });
-  }
+  const guild = Guild.getOrCreate(guildId);
 
   const openTickets = db.db.prepare(`
     SELECT COUNT(*) as count FROM tickets WHERE guild_id = ? AND status = 'open'
@@ -189,10 +186,7 @@ router.get('/guild/:guildId/settings', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const guild = Guild.get(guildId);
-  if (!guild) {
-    return res.status(404).json({ error: 'Guild not found' });
-  }
+  const guild = Guild.getOrCreate(guildId);
 
   res.json({
     ticketLogChannel: guild.ticketLogChannel,
@@ -200,7 +194,7 @@ router.get('/guild/:guildId/settings', requireAuth, (req, res) => {
     ticketCategory: guild.ticketCategory,
     ticketLimit: guild.ticketLimit,
     autoCloseHours: guild.autoCloseHours,
-    supportRoles: guild.supportRoles
+    supportRoles: guild.supportRoles || []
   });
 });
 
