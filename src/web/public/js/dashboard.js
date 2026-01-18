@@ -870,7 +870,8 @@ function addTicketType() {
     description: '',
     emoji: '',
     color: 'primary',
-    categoryId: ''
+    categoryId: '',
+    supportRoles: []
   });
 
   renderTicketTypesList();
@@ -885,6 +886,29 @@ function updateTicketType(id, field, value) {
   const type = panelTicketTypes.find(t => t.id === id);
   if (type) {
     type[field] = value;
+  }
+}
+
+function addTypeRole(typeId) {
+  const select = document.getElementById(`add-role-${typeId}`);
+  const roleId = select.value;
+  if (!roleId) return;
+
+  const type = panelTicketTypes.find(t => t.id === typeId);
+  if (type) {
+    if (!type.supportRoles) type.supportRoles = [];
+    if (!type.supportRoles.includes(roleId)) {
+      type.supportRoles.push(roleId);
+      renderTicketTypesList();
+    }
+  }
+}
+
+function removeTypeRole(typeId, roleId) {
+  const type = panelTicketTypes.find(t => t.id === typeId);
+  if (type && type.supportRoles) {
+    type.supportRoles = type.supportRoles.filter(r => r !== roleId);
+    renderTicketTypesList();
   }
 }
 
@@ -935,6 +959,32 @@ function renderTicketTypesList() {
           ).join('') || ''}
         </select>
       </div>
+      <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+        <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Support Roles for this ticket type:</label>
+        <div id="type-roles-${type.id}" style="margin-bottom: 8px; min-height: 24px;">
+          ${(type.supportRoles || []).length > 0
+            ? type.supportRoles.map(roleId => {
+                const role = guildRoles?.find(r => r.id === roleId);
+                return `
+                  <span style="display: inline-flex; align-items: center; gap: 4px; background: var(--bg-secondary); padding: 3px 8px; border-radius: 4px; margin: 2px; font-size: 12px;">
+                    <span style="color: ${role?.color || '#fff'}">${role?.name || roleId}</span>
+                    <button onclick="removeTypeRole(${type.id}, '${roleId}')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0; font-size: 14px;">×</button>
+                  </span>
+                `;
+              }).join('')
+            : '<span style="color: var(--text-secondary); font-size: 12px;">Uses global support roles</span>'
+          }
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <select id="add-role-${type.id}" class="input" style="flex: 1; padding: 6px 10px; font-size: 12px;">
+            <option value="">Add a support role...</option>
+            ${guildRoles?.filter(r => !(type.supportRoles || []).includes(r.id)).map(r =>
+              `<option value="${r.id}">${r.name}</option>`
+            ).join('') || ''}
+          </select>
+          <button class="btn btn-small btn-secondary" onclick="addTypeRole(${type.id})" style="padding: 6px 12px;">Add</button>
+        </div>
+      </div>
     </div>
   `).join('');
 }
@@ -970,7 +1020,8 @@ async function createPanel() {
           description: t.description,
           emoji: t.emoji,
           color: t.color,
-          categoryId: t.categoryId || null
+          categoryId: t.categoryId || null,
+          supportRoles: t.supportRoles || []
         }))
       })
     });

@@ -58,7 +58,11 @@ async function handleTicketCreate(interaction, panelType = null) {
   const ticketNumber = await guildSettings.incrementTicketCounter();
   const channelName = `ticket-${ticketNumber}`;
 
-  const supportRoles = guildSettings.supportRoles;
+  // Determine support roles: type-specific > global support roles
+  const supportRoles = (ticketTypeConfig?.supportRoles && ticketTypeConfig.supportRoles.length > 0)
+    ? ticketTypeConfig.supportRoles
+    : guildSettings.supportRoles;
+
   const permissionOverwrites = [
     {
       id: guild.id,
