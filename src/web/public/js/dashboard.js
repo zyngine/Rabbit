@@ -1,6 +1,8 @@
 let currentGuild = null;
 let currentPage = 'overview';
 let userData = null;
+let guildChannels = null;
+let guildRoles = null;
 
 async function init() {
   try {
@@ -68,12 +70,24 @@ async function loadGuilds() {
   }
 }
 
-function selectGuild(guildId, guilds) {
+async function selectGuild(guildId, guilds) {
   currentGuild = guilds.find(g => g.id === guildId);
 
   document.querySelectorAll('.guild-item').forEach(item => {
     item.classList.toggle('active', item.dataset.guildId === guildId);
   });
+
+  // Load channels and roles for this guild
+  try {
+    const [channelsRes, rolesRes] = await Promise.all([
+      fetch(`/api/guild/${guildId}/channels`),
+      fetch(`/api/guild/${guildId}/roles`)
+    ]);
+    guildChannels = await channelsRes.json();
+    guildRoles = await rolesRes.json();
+  } catch (e) {
+    console.error('Failed to load guild data:', e);
+  }
 
   loadPage(currentPage);
 }
@@ -197,42 +211,223 @@ async function loadTickets() {
   content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
   try {
-    const response = await fetch(`/api/guild/${currentGuild.id}/tickets`);
-    const data = await response.json();
+    const [ticketsRes, panelsRes, blacklistRes] = await Promise.all([
+      fetch(`/api/guild/${currentGuild.id}/tickets`),
+      fetch(`/api/guild/${currentGuild.id}/panels`),
+      fetch(`/api/guild/${currentGuild.id}/blacklist`)
+    ]);
+
+    const ticketsData = await ticketsRes.json();
+    const panels = await panelsRes.json();
+    const blacklist = await blacklistRes.json();
 
     content.innerHTML = `
       <div class="tabs">
-        <div class="tab active" data-filter="">All</div>
-        <div class="tab" data-filter="open">Open</div>
-        <div class="tab" data-filter="closed">Closed</div>
+        <div class="tab active" data-tab="tickets">Tickets</div>
+        <div class="tab" data-tab="panels">Panels (${panels.length})</div>
+        <div class="tab" data-tab="blacklist">Blacklist (${blacklist.length})</div>
       </div>
 
-      <div class="card">
-        <div class="card-body" id="tickets-table">
-          ${renderTicketsTable(data.tickets)}
-        </div>
+      <div id="tab-content">
+        ${renderTicketsTab(ticketsData)}
       </div>
     `;
 
+    // Tab switching
     document.querySelectorAll('.tabs .tab').forEach(tab => {
       tab.addEventListener('click', async () => {
         document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
 
-        const filter = tab.dataset.filter;
-        const url = filter
-          ? `/api/guild/${currentGuild.id}/tickets?status=${filter}`
-          : `/api/guild/${currentGuild.id}/tickets`;
-
-        const res = await fetch(url);
-        const d = await res.json();
-        document.getElementById('tickets-table').innerHTML = renderTicketsTable(d.tickets);
+        const tabName = tab.dataset.tab;
+        if (tabName === 'tickets') {
+          document.getElementById('tab-content').innerHTML = renderTicketsTab(ticketsData);
+          setupTicketFilters();
+        } else if (tabName === 'panels') {
+          document.getElementById('tab-content').innerHTML = renderPanelsTab(panels);
+          setupPanelActions();
+        } else if (tabName === 'blacklist') {
+          document.getElementById('tab-content').innerHTML = renderBlacklistTab(blacklist);
+          setupBlacklistActions();
+        }
       });
     });
+
+    setupTicketFilters();
   } catch (error) {
     console.error('Failed to load tickets:', error);
     content.innerHTML = '<div class="empty-state"><p>Failed to load tickets</p></div>';
   }
+}
+
+function renderTicketsTab(data) {
+  return `
+    <div class="filter-bar" style="margin-bottom: 16px;">
+      <button class="btn btn-small filter-btn active" data-filter="">All</button>
+      <button class="btn btn-small filter-btn" data-filter="open">Open</button>
+      <button class="btn btn-small filter-btn" data-filter="closed">Closed</button>
+    </div>
+    <div class="card">
+      <div class="card-body" id="tickets-table">
+        ${renderTicketsTable(data.tickets)}
+      </div>
+    </div>
+  `;
+}
+
+function setupTicketFilters() {
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const filter = btn.dataset.filter;
+      const url = filter
+        ? `/api/guild/${currentGuild.id}/tickets?status=${filter}`
+        : `/api/guild/${currentGuild.id}/tickets`;
+
+      const res = await fetch(url);
+      const data = await res.json();
+      document.getElementById('tickets-table').innerHTML = renderTicketsTable(data.tickets);
+    });
+  });
+}
+
+function renderPanelsTab(panels) {
+  if (panels.length === 0) {
+    return `
+      <div class="empty-state">
+        <div class="empty-state-icon">📋</div>
+        <p>No ticket panels created yet</p>
+        <p style="color: var(--text-secondary); font-size: 14px;">Use /panel command in Discord to create one</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="card">
+      <div class="card-body">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Title</th>
+              <th>Button</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${panels.map(panel => `
+              <tr>
+                <td>${panel.panel_type}</td>
+                <td>${panel.title}</td>
+                <td>${panel.button_label}</td>
+                <td>${new Date(panel.created_at).toLocaleDateString()}</td>
+                <td>
+                  <button class="btn btn-small btn-danger delete-panel" data-id="${panel.id}">Delete</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function setupPanelActions() {
+  document.querySelectorAll('.delete-panel').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this panel?')) return;
+
+      const panelId = btn.dataset.id;
+      await fetch(`/api/guild/${currentGuild.id}/panels/${panelId}`, { method: 'DELETE' });
+      loadTickets();
+    });
+  });
+}
+
+function renderBlacklistTab(blacklist) {
+  return `
+    <div class="card">
+      <div class="card-header">
+        <h3>Blacklisted Users</h3>
+        <button class="btn btn-small btn-primary" onclick="showAddBlacklistModal()">Add User</button>
+      </div>
+      <div class="card-body">
+        ${blacklist.length > 0 ? `
+          <table class="table">
+            <thead>
+              <tr>
+                <th>User ID</th>
+                <th>Reason</th>
+                <th>Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${blacklist.map(b => `
+                <tr>
+                  <td>${b.user_id}</td>
+                  <td>${b.reason || 'No reason'}</td>
+                  <td>${new Date(b.created_at).toLocaleDateString()}</td>
+                  <td>
+                    <button class="btn btn-small btn-danger remove-blacklist" data-id="${b.user_id}">Remove</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : '<div class="empty-state"><p>No blacklisted users</p></div>'}
+      </div>
+    </div>
+    <div id="blacklist-modal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <h3>Add to Blacklist</h3>
+        <input type="text" id="blacklist-user-id" placeholder="User ID" class="input">
+        <input type="text" id="blacklist-reason" placeholder="Reason (optional)" class="input">
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="hideModal('blacklist-modal')">Cancel</button>
+          <button class="btn btn-primary" onclick="addToBlacklist()">Add</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function setupBlacklistActions() {
+  document.querySelectorAll('.remove-blacklist').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const userId = btn.dataset.id;
+      await fetch(`/api/guild/${currentGuild.id}/blacklist/${userId}`, { method: 'DELETE' });
+      loadTickets();
+    });
+  });
+}
+
+function showAddBlacklistModal() {
+  document.getElementById('blacklist-modal').style.display = 'flex';
+}
+
+function hideModal(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+async function addToBlacklist() {
+  const userId = document.getElementById('blacklist-user-id').value;
+  const reason = document.getElementById('blacklist-reason').value;
+
+  if (!userId) return alert('Please enter a user ID');
+
+  await fetch(`/api/guild/${currentGuild.id}/blacklist`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, reason })
+  });
+
+  hideModal('blacklist-modal');
+  loadTickets();
 }
 
 function renderTicketsTable(tickets) {
@@ -282,26 +477,13 @@ async function loadApplications() {
     const types = await typesRes.json();
 
     content.innerHTML = `
-      <div class="stats-grid" style="margin-bottom: 20px;">
-        ${types.map(type => `
-          <div class="stat-card">
-            <div class="stat-value">${type.questionCount}</div>
-            <div class="stat-label">${type.name} (${type.active ? 'Active' : 'Inactive'})</div>
-          </div>
-        `).join('')}
-      </div>
-
       <div class="tabs">
-        <div class="tab active" data-filter="">All</div>
-        <div class="tab" data-filter="pending">Pending</div>
-        <div class="tab" data-filter="accepted">Accepted</div>
-        <div class="tab" data-filter="denied">Denied</div>
+        <div class="tab active" data-tab="submissions">Submissions</div>
+        <div class="tab" data-tab="types">Application Types (${types.length})</div>
       </div>
 
-      <div class="card">
-        <div class="card-body" id="applications-table">
-          ${renderApplicationsTable(appsData.applications)}
-        </div>
+      <div id="app-tab-content">
+        ${renderApplicationsTab(appsData, types)}
       </div>
     `;
 
@@ -310,20 +492,228 @@ async function loadApplications() {
         document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
 
-        const filter = tab.dataset.filter;
-        const url = filter
-          ? `/api/guild/${currentGuild.id}/applications?status=${filter}`
-          : `/api/guild/${currentGuild.id}/applications`;
-
-        const res = await fetch(url);
-        const d = await res.json();
-        document.getElementById('applications-table').innerHTML = renderApplicationsTable(d.applications);
+        const tabName = tab.dataset.tab;
+        if (tabName === 'submissions') {
+          document.getElementById('app-tab-content').innerHTML = renderApplicationsTab(appsData, types);
+          setupAppFilters(types);
+        } else if (tabName === 'types') {
+          document.getElementById('app-tab-content').innerHTML = await renderAppTypesTab(types);
+          setupAppTypeActions();
+        }
       });
     });
+
+    setupAppFilters(types);
   } catch (error) {
     console.error('Failed to load applications:', error);
     content.innerHTML = '<div class="empty-state"><p>Failed to load applications</p></div>';
   }
+}
+
+function renderApplicationsTab(data, types) {
+  return `
+    <div class="filter-bar" style="margin-bottom: 16px;">
+      <button class="btn btn-small filter-btn active" data-filter="">All</button>
+      <button class="btn btn-small filter-btn" data-filter="pending">Pending</button>
+      <button class="btn btn-small filter-btn" data-filter="accepted">Accepted</button>
+      <button class="btn btn-small filter-btn" data-filter="denied">Denied</button>
+    </div>
+    <div class="card">
+      <div class="card-body" id="applications-table">
+        ${renderApplicationsTable(data.applications)}
+      </div>
+    </div>
+  `;
+}
+
+function setupAppFilters(types) {
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const filter = btn.dataset.filter;
+      const url = filter
+        ? `/api/guild/${currentGuild.id}/applications?status=${filter}`
+        : `/api/guild/${currentGuild.id}/applications`;
+
+      const res = await fetch(url);
+      const data = await res.json();
+      document.getElementById('applications-table').innerHTML = renderApplicationsTable(data.applications);
+    });
+  });
+}
+
+async function renderAppTypesTab(types) {
+  return `
+    <div class="card">
+      <div class="card-header">
+        <h3>Application Types</h3>
+        <button class="btn btn-small btn-primary" onclick="showCreateAppTypeModal()">Create New</button>
+      </div>
+      <div class="card-body">
+        ${types.length > 0 ? types.map(type => `
+          <div class="app-type-card" style="background: var(--bg-tertiary); padding: 16px; border-radius: 8px; margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h4 style="margin-bottom: 4px;">${type.name} ${type.active ? '<span class="badge badge-open">Active</span>' : '<span class="badge badge-closed">Inactive</span>'}</h4>
+                <p style="color: var(--text-secondary); font-size: 14px;">${type.description || 'No description'}</p>
+                <p style="color: var(--text-secondary); font-size: 12px; margin-top: 8px;">
+                  Questions: ${type.questionCount}/5 | Cooldown: ${type.cooldownHours}h | Creates Ticket: ${type.createTicket ? 'Yes' : 'No'}
+                </p>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-small btn-secondary edit-app-type" data-id="${type.id}">Edit</button>
+                <button class="btn btn-small btn-secondary manage-questions" data-id="${type.id}" data-name="${type.name}">Questions</button>
+                <button class="btn btn-small ${type.active ? 'btn-warning' : 'btn-success'} toggle-app-type" data-id="${type.id}" data-active="${type.active}">${type.active ? 'Disable' : 'Enable'}</button>
+                <button class="btn btn-small btn-danger delete-app-type" data-id="${type.id}">Delete</button>
+              </div>
+            </div>
+          </div>
+        `).join('') : '<div class="empty-state"><p>No application types created</p></div>'}
+      </div>
+    </div>
+
+    <div id="create-app-modal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <h3>Create Application Type</h3>
+        <input type="text" id="app-name" placeholder="Name (e.g., Staff Application)" class="input">
+        <textarea id="app-description" placeholder="Description" class="input" rows="3"></textarea>
+        <input type="number" id="app-cooldown" placeholder="Cooldown (hours)" class="input" value="24">
+        <label style="display: flex; align-items: center; gap: 8px; margin: 12px 0;">
+          <input type="checkbox" id="app-create-ticket" checked>
+          Create ticket on submission
+        </label>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="hideModal('create-app-modal')">Cancel</button>
+          <button class="btn btn-primary" onclick="createAppType()">Create</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="questions-modal" class="modal" style="display:none;">
+      <div class="modal-content" style="max-width: 600px;">
+        <h3>Manage Questions - <span id="questions-app-name"></span></h3>
+        <div id="questions-list"></div>
+        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+          <h4>Add Question</h4>
+          <input type="text" id="new-question" placeholder="Question text" class="input">
+          <select id="new-question-type" class="input">
+            <option value="short">Short Text</option>
+            <option value="paragraph">Paragraph</option>
+          </select>
+          <button class="btn btn-primary" onclick="addQuestion()">Add Question</button>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="hideModal('questions-modal')">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function setupAppTypeActions() {
+  document.querySelectorAll('.toggle-app-type').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const typeId = btn.dataset.id;
+      const currentActive = btn.dataset.active === 'true';
+
+      await fetch(`/api/guild/${currentGuild.id}/application-types/${typeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !currentActive })
+      });
+
+      loadApplications();
+    });
+  });
+
+  document.querySelectorAll('.delete-app-type').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this application type?')) return;
+
+      const typeId = btn.dataset.id;
+      await fetch(`/api/guild/${currentGuild.id}/application-types/${typeId}`, { method: 'DELETE' });
+      loadApplications();
+    });
+  });
+
+  document.querySelectorAll('.manage-questions').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const typeId = btn.dataset.id;
+      const typeName = btn.dataset.name;
+      await showQuestionsModal(typeId, typeName);
+    });
+  });
+}
+
+let currentAppTypeId = null;
+
+async function showQuestionsModal(typeId, typeName) {
+  currentAppTypeId = typeId;
+  document.getElementById('questions-app-name').textContent = typeName;
+
+  const res = await fetch(`/api/guild/${currentGuild.id}/application-types/${typeId}/questions`);
+  const questions = await res.json();
+
+  document.getElementById('questions-list').innerHTML = questions.length > 0
+    ? questions.map((q, i) => `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 8px;">
+          <div>
+            <strong>${i + 1}.</strong> ${q.question}
+            <span style="color: var(--text-secondary); font-size: 12px;">(${q.question_type})</span>
+          </div>
+          <button class="btn btn-small btn-danger" onclick="deleteQuestion(${q.id})">Delete</button>
+        </div>
+      `).join('')
+    : '<p style="color: var(--text-secondary);">No questions added yet</p>';
+
+  document.getElementById('questions-modal').style.display = 'flex';
+}
+
+async function addQuestion() {
+  const question = document.getElementById('new-question').value;
+  const questionType = document.getElementById('new-question-type').value;
+
+  if (!question) return alert('Please enter a question');
+
+  await fetch(`/api/guild/${currentGuild.id}/application-types/${currentAppTypeId}/questions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, questionType })
+  });
+
+  document.getElementById('new-question').value = '';
+  showQuestionsModal(currentAppTypeId, document.getElementById('questions-app-name').textContent);
+}
+
+async function deleteQuestion(questionId) {
+  await fetch(`/api/guild/${currentGuild.id}/application-types/${currentAppTypeId}/questions/${questionId}`, {
+    method: 'DELETE'
+  });
+  showQuestionsModal(currentAppTypeId, document.getElementById('questions-app-name').textContent);
+}
+
+function showCreateAppTypeModal() {
+  document.getElementById('create-app-modal').style.display = 'flex';
+}
+
+async function createAppType() {
+  const name = document.getElementById('app-name').value;
+  const description = document.getElementById('app-description').value;
+  const cooldownHours = parseInt(document.getElementById('app-cooldown').value) || 24;
+  const createTicket = document.getElementById('app-create-ticket').checked;
+
+  if (!name) return alert('Please enter a name');
+
+  await fetch(`/api/guild/${currentGuild.id}/application-types`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, description, cooldownHours, createTicket })
+  });
+
+  hideModal('create-app-modal');
+  loadApplications();
 }
 
 function renderApplicationsTable(applications) {
@@ -365,37 +755,86 @@ async function loadSettings() {
     const response = await fetch(`/api/guild/${currentGuild.id}/settings`);
     const settings = await response.json();
 
+    const channelOptions = guildChannels?.textChannels?.map(c =>
+      `<option value="${c.id}" ${settings.ticketLogChannel === c.id ? 'selected' : ''}>#${c.name}</option>`
+    ).join('') || '';
+
+    const categoryOptions = guildChannels?.categories?.map(c =>
+      `<option value="${c.id}" ${settings.ticketCategory === c.id ? 'selected' : ''}>${c.name}</option>`
+    ).join('') || '';
+
+    const roleOptions = guildRoles?.map(r =>
+      `<option value="${r.id}">${r.name}</option>`
+    ).join('') || '';
+
     content.innerHTML = `
-      <div class="card">
-        <div class="card-header">
-          <h3>Ticket Settings</h3>
-        </div>
-        <div class="card-body">
-          <div style="display: grid; gap: 20px; max-width: 400px;">
-            <div>
-              <label style="display: block; margin-bottom: 8px; color: var(--text-secondary);">Ticket Limit per User</label>
-              <input type="number" id="ticketLimit" value="${settings.ticketLimit}" min="1" max="10"
-                style="width: 100%; padding: 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary);">
+      <div class="settings-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+        <div class="card">
+          <div class="card-header">
+            <h3>Ticket Settings</h3>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>Ticket Limit per User</label>
+              <input type="number" id="ticketLimit" value="${settings.ticketLimit}" min="1" max="10" class="input">
             </div>
-            <div>
-              <label style="display: block; margin-bottom: 8px; color: var(--text-secondary);">Auto-Close (hours, 0 to disable)</label>
-              <input type="number" id="autoCloseHours" value="${settings.autoCloseHours}" min="0" max="720"
-                style="width: 100%; padding: 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary);">
+            <div class="form-group">
+              <label>Auto-Close (hours, 0 to disable)</label>
+              <input type="number" id="autoCloseHours" value="${settings.autoCloseHours}" min="0" max="720" class="input">
+            </div>
+            <div class="form-group">
+              <label>Log Channel</label>
+              <select id="ticketLogChannel" class="input">
+                <option value="">None</option>
+                ${channelOptions}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Transcript Channel</label>
+              <select id="ticketTranscriptChannel" class="input">
+                <option value="">None</option>
+                ${guildChannels?.textChannels?.map(c =>
+                  `<option value="${c.id}" ${settings.ticketTranscriptChannel === c.id ? 'selected' : ''}>#${c.name}</option>`
+                ).join('') || ''}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Ticket Category</label>
+              <select id="ticketCategory" class="input">
+                <option value="">None</option>
+                ${categoryOptions}
+              </select>
             </div>
             <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
           </div>
+        </div>
 
-          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border);">
-            <h4 style="margin-bottom: 16px;">Current Configuration</h4>
-            <p style="color: var(--text-secondary);">
-              <strong>Log Channel:</strong> ${settings.ticketLogChannel || 'Not set'}<br>
-              <strong>Transcript Channel:</strong> ${settings.ticketTranscriptChannel || 'Not set'}<br>
-              <strong>Ticket Category:</strong> ${settings.ticketCategory || 'Not set'}<br>
-              <strong>Support Roles:</strong> ${settings.supportRoles.length || 0} configured
-            </p>
-            <p style="color: var(--text-secondary); margin-top: 12px; font-size: 14px;">
-              Use Discord commands to configure channels and roles.
-            </p>
+        <div class="card">
+          <div class="card-header">
+            <h3>Support Roles</h3>
+          </div>
+          <div class="card-body">
+            <div id="support-roles-list">
+              ${settings.supportRoles.length > 0
+                ? settings.supportRoles.map(roleId => {
+                    const role = guildRoles?.find(r => r.id === roleId);
+                    return `
+                      <div class="role-tag" style="display: inline-flex; align-items: center; gap: 8px; background: var(--bg-tertiary); padding: 6px 12px; border-radius: 6px; margin: 4px;">
+                        <span style="color: ${role?.color || '#fff'}">${role?.name || roleId}</span>
+                        <button class="btn btn-small btn-danger" onclick="removeSupportRole('${roleId}')" style="padding: 2px 6px;">×</button>
+                      </div>
+                    `;
+                  }).join('')
+                : '<p style="color: var(--text-secondary);">No support roles configured</p>'
+              }
+            </div>
+            <div style="margin-top: 16px; display: flex; gap: 8px;">
+              <select id="add-support-role" class="input" style="flex: 1;">
+                <option value="">Select a role...</option>
+                ${roleOptions}
+              </select>
+              <button class="btn btn-primary" onclick="addSupportRole()">Add</button>
+            </div>
           </div>
         </div>
       </div>
@@ -409,6 +848,9 @@ async function loadSettings() {
 async function saveSettings() {
   const ticketLimit = document.getElementById('ticketLimit').value;
   const autoCloseHours = document.getElementById('autoCloseHours').value;
+  const ticketLogChannel = document.getElementById('ticketLogChannel').value;
+  const ticketTranscriptChannel = document.getElementById('ticketTranscriptChannel').value;
+  const ticketCategory = document.getElementById('ticketCategory').value;
 
   try {
     const response = await fetch(`/api/guild/${currentGuild.id}/settings`, {
@@ -416,7 +858,10 @@ async function saveSettings() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ticketLimit: parseInt(ticketLimit),
-        autoCloseHours: parseInt(autoCloseHours)
+        autoCloseHours: parseInt(autoCloseHours),
+        ticketLogChannel: ticketLogChannel || null,
+        ticketTranscriptChannel: ticketTranscriptChannel || null,
+        ticketCategory: ticketCategory || null
       })
     });
 
@@ -429,6 +874,24 @@ async function saveSettings() {
     console.error('Failed to save settings:', error);
     alert('Failed to save settings');
   }
+}
+
+async function addSupportRole() {
+  const roleId = document.getElementById('add-support-role').value;
+  if (!roleId) return alert('Please select a role');
+
+  await fetch(`/api/guild/${currentGuild.id}/support-roles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roleId })
+  });
+
+  loadSettings();
+}
+
+async function removeSupportRole(roleId) {
+  await fetch(`/api/guild/${currentGuild.id}/support-roles/${roleId}`, { method: 'DELETE' });
+  loadSettings();
 }
 
 init();
