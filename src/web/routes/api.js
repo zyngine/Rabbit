@@ -510,6 +510,67 @@ router.delete('/guild/:guildId/application-types/:typeId', requireAuth, (req, re
   res.json({ success: true });
 });
 
+// Deploy application panel to a channel
+router.post('/guild/:guildId/application-types/:typeId/deploy', requireAuth, async (req, res) => {
+  const { guildId, typeId } = req.params;
+  const { title, description, buttonLabel, channelId } = req.body;
+
+  if (!hasGuildAccess(req, guildId)) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const appType = ApplicationType.get(typeId);
+  if (!appType || appType.guildId !== guildId) {
+    return res.status(404).json({ error: 'Application type not found' });
+  }
+
+  const discordClient = req.app.get('discordClient');
+  if (!discordClient) {
+    return res.status(500).json({ error: 'Bot not connected' });
+  }
+
+  const guild = discordClient.guilds.cache.get(guildId);
+  if (!guild) {
+    return res.status(404).json({ error: 'Guild not found' });
+  }
+
+  const channel = guild.channels.cache.get(channelId);
+  if (!channel) {
+    return res.status(404).json({ error: 'Channel not found' });
+  }
+
+  try {
+    const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle(title || appType.name)
+      .setDescription(description || 'Click the button below to submit your application.')
+      .setFooter({ text: 'Application System' });
+
+    const row = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(`application_start_${typeId}`)
+          .setLabel(buttonLabel || 'Apply Now')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('📝')
+      );
+
+    const message = await channel.send({ embeds: [embed], components: [row] });
+
+    // Update application type with channel and message info
+    appType.channelId = channelId;
+    appType.messageId = message.id;
+    appType.save();
+
+    res.json({ success: true, messageId: message.id });
+  } catch (error) {
+    console.error('Failed to deploy application panel:', error);
+    res.status(500).json({ error: 'Failed to deploy application panel: ' + error.message });
+  }
+});
+
 // Get questions for application type
 router.get('/guild/:guildId/application-types/:typeId/questions', requireAuth, (req, res) => {
   const { guildId, typeId } = req.params;

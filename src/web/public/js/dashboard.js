@@ -617,6 +617,10 @@ function setupAppFilters(types) {
 }
 
 async function renderAppTypesTab(types) {
+  const channelOptions = guildChannels?.textChannels?.map(c =>
+    `<option value="${c.id}">#${c.name}</option>`
+  ).join('') || '';
+
   return `
     <div class="card">
       <div class="card-header">
@@ -634,8 +638,8 @@ async function renderAppTypesTab(types) {
                   Questions: ${type.questionCount}/5 | Cooldown: ${type.cooldownHours}h | Creates Ticket: ${type.createTicket ? 'Yes' : 'No'}
                 </p>
               </div>
-              <div style="display: flex; gap: 8px;">
-                <button class="btn btn-small btn-secondary edit-app-type" data-id="${type.id}">Edit</button>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-small btn-primary deploy-app-type" data-id="${type.id}" data-name="${type.name}" data-description="${type.description || ''}">Deploy</button>
                 <button class="btn btn-small btn-secondary manage-questions" data-id="${type.id}" data-name="${type.name}">Questions</button>
                 <button class="btn btn-small ${type.active ? 'btn-warning' : 'btn-success'} toggle-app-type" data-id="${type.id}" data-active="${type.active}">${type.active ? 'Disable' : 'Enable'}</button>
                 <button class="btn btn-small btn-danger delete-app-type" data-id="${type.id}">Delete</button>
@@ -659,6 +663,41 @@ async function renderAppTypesTab(types) {
         <div class="modal-actions">
           <button class="btn btn-secondary" onclick="hideModal('create-app-modal')">Cancel</button>
           <button class="btn btn-primary" onclick="createAppType()">Create</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="deploy-app-modal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <h3>Deploy Application Panel</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 16px;">This will post an application panel to the selected channel where users can apply.</p>
+        <input type="hidden" id="deploy-app-type-id">
+        <div class="form-group">
+          <label>Application Type</label>
+          <input type="text" id="deploy-app-name" class="input" readonly>
+        </div>
+        <div class="form-group">
+          <label>Panel Title</label>
+          <input type="text" id="deploy-app-title" class="input" placeholder="Staff Applications">
+        </div>
+        <div class="form-group">
+          <label>Panel Description</label>
+          <textarea id="deploy-app-description" class="input" rows="3" placeholder="Click the button below to apply"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Button Label</label>
+          <input type="text" id="deploy-app-button" class="input" value="Apply Now">
+        </div>
+        <div class="form-group">
+          <label>Channel</label>
+          <select id="deploy-app-channel" class="input">
+            <option value="">Select a channel...</option>
+            ${channelOptions}
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="hideModal('deploy-app-modal')">Cancel</button>
+          <button class="btn btn-primary" onclick="deployAppType()">Deploy</button>
         </div>
       </div>
     </div>
@@ -717,6 +756,55 @@ function setupAppTypeActions() {
       await showQuestionsModal(typeId, typeName);
     });
   });
+
+  document.querySelectorAll('.deploy-app-type').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const typeId = btn.dataset.id;
+      const typeName = btn.dataset.name;
+      const typeDescription = btn.dataset.description;
+      showDeployAppModal(typeId, typeName, typeDescription);
+    });
+  });
+}
+
+function showDeployAppModal(typeId, typeName, typeDescription) {
+  document.getElementById('deploy-app-type-id').value = typeId;
+  document.getElementById('deploy-app-name').value = typeName;
+  document.getElementById('deploy-app-title').value = typeName;
+  document.getElementById('deploy-app-description').value = typeDescription || 'Click the button below to submit your application.';
+  document.getElementById('deploy-app-button').value = 'Apply Now';
+  document.getElementById('deploy-app-channel').value = '';
+  document.getElementById('deploy-app-modal').style.display = 'flex';
+}
+
+async function deployAppType() {
+  const typeId = document.getElementById('deploy-app-type-id').value;
+  const title = document.getElementById('deploy-app-title').value;
+  const description = document.getElementById('deploy-app-description').value;
+  const buttonLabel = document.getElementById('deploy-app-button').value || 'Apply Now';
+  const channelId = document.getElementById('deploy-app-channel').value;
+
+  if (!title) return alert('Please enter a title');
+  if (!channelId) return alert('Please select a channel');
+
+  try {
+    const response = await fetch(`/api/guild/${currentGuild.id}/application-types/${typeId}/deploy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, description, buttonLabel, channelId })
+    });
+
+    const result = await response.json();
+    if (response.ok) {
+      hideModal('deploy-app-modal');
+      alert('Application panel deployed successfully!');
+    } else {
+      alert(result.error || 'Failed to deploy application panel');
+    }
+  } catch (error) {
+    console.error('Failed to deploy application:', error);
+    alert('Failed to deploy application panel');
+  }
 }
 
 let currentAppTypeId = null;
