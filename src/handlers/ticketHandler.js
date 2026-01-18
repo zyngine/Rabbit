@@ -30,6 +30,17 @@ async function handleTicketCreate(interaction, panelType = null) {
   // Use the panelType passed in (from button customId or select menu value)
   const ticketType = panelType || panel.panel_type;
 
+  // Find the ticket type config to get its specific category
+  let ticketTypeConfig = null;
+  if (panel.ticket_types) {
+    try {
+      const ticketTypes = JSON.parse(panel.ticket_types);
+      ticketTypeConfig = ticketTypes.find(t => t.name === ticketType);
+    } catch (e) {
+      logger.warn('Failed to parse ticket_types:', e);
+    }
+  }
+
   const blacklisted = await db.isBlacklisted(guild.id, user.id);
   if (blacklisted) {
     return interaction.editReply({
@@ -79,11 +90,14 @@ async function handleTicketCreate(interaction, panelType = null) {
     });
   }
 
+  // Determine category: type-specific > panel default > guild default
+  const ticketCategory = ticketTypeConfig?.categoryId || panel.category_id || guildSettings.ticketCategory;
+
   try {
     const channel = await guild.channels.create({
       name: channelName,
       type: ChannelType.GuildText,
-      parent: panel.category_id || guildSettings.ticketCategory,
+      parent: ticketCategory,
       permissionOverwrites
     });
 

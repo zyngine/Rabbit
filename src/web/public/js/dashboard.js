@@ -377,19 +377,12 @@ function renderPanelsTab(panels) {
             ${channelOptions}
           </select>
         </div>
-        <div class="form-group">
-          <label>Default Ticket Category (optional)</label>
-          <select id="panel-category" class="input">
-            <option value="">Use server default</option>
-            ${categoryOptions}
-          </select>
-        </div>
-
         <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <label style="margin: 0; font-weight: 600;">Ticket Types</label>
             <button class="btn btn-small btn-secondary" onclick="addTicketType()">+ Add Type</button>
           </div>
+          <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">Each ticket type can have its own category where tickets are created.</p>
           <div id="ticket-types-list"></div>
         </div>
 
@@ -876,7 +869,8 @@ function addTicketType() {
     label: '',
     description: '',
     emoji: '',
-    color: 'primary'
+    color: 'primary',
+    categoryId: ''
   });
 
   renderTicketTypesList();
@@ -903,6 +897,10 @@ function renderTicketTypesList() {
     return;
   }
 
+  const categoryOptions = guildChannels?.categories?.map(c =>
+    `<option value="${c.id}">${c.name}</option>`
+  ).join('') || '';
+
   list.innerHTML = panelTicketTypes.map((type, index) => `
     <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px; margin-bottom: 8px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -915,12 +913,12 @@ function renderTicketTypesList() {
         <input type="text" placeholder="Button/Option Label" class="input"
           value="${type.label}" onchange="updateTicketType(${type.id}, 'label', this.value)">
       </div>
-      <div style="display: grid; grid-template-columns: ${style === 'buttons' ? '1fr 1fr' : '2fr 1fr'}; gap: 8px; margin-top: 8px;">
+      <div style="display: grid; grid-template-columns: ${style === 'buttons' ? '1fr 1fr 1fr' : '2fr 1fr 1fr'}; gap: 8px; margin-top: 8px;">
         ${style === 'select' ? `
           <input type="text" placeholder="Description (optional)" class="input"
             value="${type.description}" onchange="updateTicketType(${type.id}, 'description', this.value)">
         ` : ''}
-        <input type="text" placeholder="Emoji (optional)" class="input" style="max-width: 120px;"
+        <input type="text" placeholder="Emoji (optional)" class="input"
           value="${type.emoji}" onchange="updateTicketType(${type.id}, 'emoji', this.value)">
         ${style === 'buttons' ? `
           <select class="input" onchange="updateTicketType(${type.id}, 'color', this.value)">
@@ -930,6 +928,12 @@ function renderTicketTypesList() {
             <option value="danger" ${type.color === 'danger' ? 'selected' : ''}>Red</option>
           </select>
         ` : ''}
+        <select class="input" onchange="updateTicketType(${type.id}, 'categoryId', this.value)">
+          <option value="">Use server default</option>
+          ${guildChannels?.categories?.map(c =>
+            `<option value="${c.id}" ${type.categoryId === c.id ? 'selected' : ''}>${c.name}</option>`
+          ).join('') || ''}
+        </select>
       </div>
     </div>
   `).join('');
@@ -940,7 +944,6 @@ async function createPanel() {
   const description = document.getElementById('panel-description').value;
   const style = document.getElementById('panel-style').value;
   const channelId = document.getElementById('panel-channel').value;
-  const categoryId = document.getElementById('panel-category').value;
 
   if (!title) return alert('Please enter a title');
   if (!channelId) return alert('Please select a channel');
@@ -961,13 +964,13 @@ async function createPanel() {
         description,
         style,
         channelId,
-        categoryId: categoryId || null,
         ticketTypes: panelTicketTypes.map(t => ({
           name: t.name,
           label: t.label,
           description: t.description,
           emoji: t.emoji,
-          color: t.color
+          color: t.color,
+          categoryId: t.categoryId || null
         }))
       })
     });
@@ -979,7 +982,6 @@ async function createPanel() {
       document.getElementById('panel-title').value = '';
       document.getElementById('panel-description').value = '';
       document.getElementById('panel-channel').value = '';
-      document.getElementById('panel-category').value = '';
       panelTicketTypes = [];
       loadTickets();
     } else {
