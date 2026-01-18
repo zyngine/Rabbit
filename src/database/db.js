@@ -2,13 +2,33 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-// Railway provides DATABASE_URL automatically when you add PostgreSQL
+// Railway provides DATABASE_URL or DATABASE_PUBLIC_URL
+const databaseUrl = process.env.DATABASE_URL || process.env.DATABASE_PUBLIC_URL;
+
+if (!databaseUrl) {
+  console.error('[Database] ERROR: No DATABASE_URL or DATABASE_PUBLIC_URL environment variable found!');
+  console.error('[Database] Available env vars:', Object.keys(process.env).filter(k => k.includes('DATABASE') || k.includes('PG')));
+}
+
+console.log('[Database] Connecting to PostgreSQL...');
+console.log('[Database] URL configured:', databaseUrl ? 'Yes (length: ' + databaseUrl.length + ')' : 'No');
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  connectionString: databaseUrl,
+  ssl: { rejectUnauthorized: false }
+});
+
+pool.on('error', (err) => {
+  console.error('[Database] Pool error:', err.message);
 });
 
 async function initializeDatabase() {
+  console.log('[Database] Attempting to initialize...');
+
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is not configured');
+  }
+
   const client = await pool.connect();
   try {
     const schemaPath = path.join(__dirname, 'schema.sql');
@@ -16,7 +36,7 @@ async function initializeDatabase() {
     await client.query(schema);
     console.log('[Database] PostgreSQL initialized successfully');
   } catch (error) {
-    console.error('[Database] Initialization error:', error);
+    console.error('[Database] Initialization error:', error.message);
     throw error;
   } finally {
     client.release();

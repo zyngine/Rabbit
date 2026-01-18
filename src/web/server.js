@@ -110,11 +110,21 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Handle favicon.ico requests
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end();
+});
+
 app.get('*', (req, res) => {
   if (req.path.endsWith('.html') && !req.session.user && req.path !== '/index.html') {
     return res.redirect('/');
   }
-  res.sendFile(path.join(__dirname, 'public', req.path));
+  const filePath = path.join(__dirname, 'public', req.path);
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      res.status(404).send('Not found');
+    }
+  });
 });
 
 let discordClient = null;
