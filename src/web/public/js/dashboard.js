@@ -1003,14 +1003,31 @@ async function createAppType() {
 
   if (!name) return alert('Please enter a name');
 
-  await fetch(`/api/guild/${currentGuild.id}/application-types`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, description, cooldownHours, createTicket })
-  });
+  try {
+    const response = await fetch(`/api/guild/${currentGuild.id}/application-types`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, description, cooldownHours, createTicket })
+    });
 
-  hideModal('create-app-modal');
-  loadApplications();
+    const result = await response.json();
+
+    if (!response.ok) {
+      return alert(result.error || 'Failed to create application type');
+    }
+
+    // Clear form
+    document.getElementById('app-name').value = '';
+    document.getElementById('app-description').value = '';
+    document.getElementById('app-cooldown').value = '24';
+    document.getElementById('app-create-ticket').checked = true;
+
+    hideModal('create-app-modal');
+    loadApplications();
+  } catch (error) {
+    console.error('Failed to create application type:', error);
+    alert('Failed to create application type');
+  }
 }
 
 function renderApplicationsTable(applications) {

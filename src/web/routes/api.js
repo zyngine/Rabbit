@@ -451,20 +451,33 @@ router.post('/guild/:guildId/application-types', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const existing = ApplicationType.getByName(guildId, name);
-  if (existing) {
-    return res.status(400).json({ error: 'Application type with this name already exists' });
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Name is required' });
   }
 
-  const appType = ApplicationType.create({
-    guild_id: guildId,
-    name,
-    description,
-    cooldown_hours: cooldownHours || 24,
-    create_ticket: createTicket !== false
-  });
+  try {
+    const existing = ApplicationType.getByName(guildId, name);
+    if (existing) {
+      return res.status(400).json({ error: 'Application type with this name already exists' });
+    }
 
-  res.json({ success: true, id: appType.id });
+    const appType = ApplicationType.create({
+      guild_id: guildId,
+      name: name.trim(),
+      description: description || '',
+      cooldown_hours: cooldownHours || 24,
+      create_ticket: createTicket !== false
+    });
+
+    if (!appType) {
+      return res.status(500).json({ error: 'Failed to create application type' });
+    }
+
+    res.json({ success: true, id: appType.id });
+  } catch (error) {
+    console.error('Error creating application type:', error);
+    res.status(500).json({ error: 'Failed to create application type: ' + error.message });
+  }
 });
 
 // Update application type
