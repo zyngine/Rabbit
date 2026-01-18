@@ -13,6 +13,9 @@ class ApplicationType {
     this.cooldownHours = data.cooldown_hours || 24;
     this.createTicket = Boolean(data.create_ticket);
     this.active = Boolean(data.active);
+    this.pendingRole = data.pending_role;
+    this.acceptedRole = data.accepted_role;
+    this.deniedRole = data.denied_role;
     this.createdAt = data.created_at;
   }
 
@@ -49,7 +52,10 @@ class ApplicationType {
       log_channel: this.logChannel,
       cooldown_hours: this.cooldownHours,
       create_ticket: this.createTicket,
-      active: this.active
+      active: this.active,
+      pending_role: this.pendingRole,
+      accepted_role: this.acceptedRole,
+      denied_role: this.deniedRole
     });
   }
 

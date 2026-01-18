@@ -556,7 +556,7 @@ router.delete('/guild/:guildId/panels/:panelId', requireAuth, async (req, res) =
 // Create application type
 router.post('/guild/:guildId/application-types', requireAuth, async (req, res) => {
   const { guildId } = req.params;
-  const { name, description, cooldownHours, createTicket } = req.body;
+  const { name, description, cooldownHours, createTicket, pendingRole, acceptedRole, deniedRole } = req.body;
 
   if (!hasGuildAccess(req, guildId)) {
     return res.status(403).json({ error: 'Access denied' });
@@ -577,7 +577,10 @@ router.post('/guild/:guildId/application-types', requireAuth, async (req, res) =
       name: name.trim(),
       description: description || '',
       cooldown_hours: cooldownHours || 24,
-      create_ticket: createTicket !== false
+      create_ticket: createTicket !== false,
+      pending_role: pendingRole || null,
+      accepted_role: acceptedRole || null,
+      denied_role: deniedRole || null
     });
 
     if (!appType) {

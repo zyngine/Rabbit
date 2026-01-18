@@ -78,8 +78,25 @@ CREATE TABLE IF NOT EXISTS application_types (
   cooldown_hours INTEGER DEFAULT 24,
   create_ticket BOOLEAN DEFAULT true,
   active BOOLEAN DEFAULT true,
+  pending_role TEXT,
+  accepted_role TEXT,
+  denied_role TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Add role columns if they don't exist (for existing databases)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'application_types' AND column_name = 'pending_role') THEN
+    ALTER TABLE application_types ADD COLUMN pending_role TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'application_types' AND column_name = 'accepted_role') THEN
+    ALTER TABLE application_types ADD COLUMN accepted_role TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'application_types' AND column_name = 'denied_role') THEN
+    ALTER TABLE application_types ADD COLUMN denied_role TEXT;
+  END IF;
+END $$;
 
 -- Application questions
 CREATE TABLE IF NOT EXISTS application_questions (

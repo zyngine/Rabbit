@@ -614,6 +614,10 @@ async function renderAppTypesTab(types) {
     `<option value="${c.id}">#${c.name}</option>`
   ).join('') || '';
 
+  const roleOptions = guildRoles?.map(r =>
+    `<option value="${r.id}">@${r.name}</option>`
+  ).join('') || '';
+
   return `
     <div class="card">
       <div class="card-header">
@@ -644,15 +648,46 @@ async function renderAppTypesTab(types) {
     </div>
 
     <div id="create-app-modal" class="modal" style="display:none;">
-      <div class="modal-content">
+      <div class="modal-content" style="max-width: 500px;">
         <h3>Create Application Type</h3>
-        <input type="text" id="app-name" placeholder="Name (e.g., Staff Application)" class="input">
-        <textarea id="app-description" placeholder="Description" class="input" rows="3"></textarea>
-        <input type="number" id="app-cooldown" placeholder="Cooldown (hours)" class="input" value="24">
+        <div class="form-group">
+          <input type="text" id="app-name" placeholder="Name (e.g., Staff Application)" class="input">
+        </div>
+        <div class="form-group">
+          <textarea id="app-description" placeholder="Description" class="input" rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <input type="number" id="app-cooldown" placeholder="Cooldown (hours)" class="input" value="24">
+        </div>
         <label style="display: flex; align-items: center; gap: 8px; margin: 12px 0;">
           <input type="checkbox" id="app-create-ticket" checked>
           Create ticket on submission
         </label>
+        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+          <h4 style="margin-bottom: 12px; font-size: 14px;">Auto-Assign Roles</h4>
+          <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">Automatically assign roles based on application status</p>
+          <div class="form-group">
+            <label style="font-size: 12px;">On Submit (Pending)</label>
+            <select id="app-pending-role" class="input">
+              <option value="">None</option>
+              ${roleOptions}
+            </select>
+          </div>
+          <div class="form-group">
+            <label style="font-size: 12px;">On Accept</label>
+            <select id="app-accepted-role" class="input">
+              <option value="">None</option>
+              ${roleOptions}
+            </select>
+          </div>
+          <div class="form-group">
+            <label style="font-size: 12px;">On Deny</label>
+            <select id="app-denied-role" class="input">
+              <option value="">None</option>
+              ${roleOptions}
+            </select>
+          </div>
+        </div>
         <div class="modal-actions">
           <button class="btn btn-secondary" onclick="hideModal('create-app-modal')">Cancel</button>
           <button class="btn btn-primary" onclick="createAppType()">Create</button>
@@ -1053,6 +1088,9 @@ async function createAppType() {
   const description = document.getElementById('app-description').value;
   const cooldownHours = parseInt(document.getElementById('app-cooldown').value) || 24;
   const createTicket = document.getElementById('app-create-ticket').checked;
+  const pendingRole = document.getElementById('app-pending-role').value || null;
+  const acceptedRole = document.getElementById('app-accepted-role').value || null;
+  const deniedRole = document.getElementById('app-denied-role').value || null;
 
   if (!name) return alert('Please enter a name');
 
@@ -1060,7 +1098,7 @@ async function createAppType() {
     const response = await fetch(`/api/guild/${currentGuild.id}/application-types`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description, cooldownHours, createTicket })
+      body: JSON.stringify({ name, description, cooldownHours, createTicket, pendingRole, acceptedRole, deniedRole })
     });
 
     const result = await response.json();
@@ -1074,6 +1112,9 @@ async function createAppType() {
     document.getElementById('app-description').value = '';
     document.getElementById('app-cooldown').value = '24';
     document.getElementById('app-create-ticket').checked = true;
+    document.getElementById('app-pending-role').value = '';
+    document.getElementById('app-accepted-role').value = '';
+    document.getElementById('app-denied-role').value = '';
 
     hideModal('create-app-modal');
     loadApplications();

@@ -185,6 +185,19 @@ async function handleApplicationSubmit(interaction, applicationTypeId) {
     ticket_channel_id: ticketChannelId
   });
 
+  // Assign pending role if configured
+  if (appType.pendingRole) {
+    try {
+      const member = await interaction.guild.members.fetch(interaction.user.id);
+      const role = interaction.guild.roles.cache.get(appType.pendingRole);
+      if (role && role.position < interaction.guild.members.me.roles.highest.position) {
+        await member.roles.add(role);
+      }
+    } catch (e) {
+      logger.warn(`Could not assign pending role to ${interaction.user.id}: ${e.message}`);
+    }
+  }
+
   if (appType.logChannel) {
     const logChannel = interaction.guild.channels.cache.get(appType.logChannel);
     if (logChannel) {
@@ -246,6 +259,26 @@ async function handleApplicationAccept(interaction, applicationTypeId, userId, r
 
   const applicant = await guild.members.fetch(ticket.userId).catch(() => null);
   if (applicant) {
+    // Handle role assignments
+    try {
+      // Remove pending role if exists
+      if (appType.pendingRole) {
+        const pendingRole = guild.roles.cache.get(appType.pendingRole);
+        if (pendingRole && applicant.roles.cache.has(pendingRole.id)) {
+          await applicant.roles.remove(pendingRole);
+        }
+      }
+      // Add accepted role if configured
+      if (appType.acceptedRole) {
+        const acceptedRole = guild.roles.cache.get(appType.acceptedRole);
+        if (acceptedRole && acceptedRole.position < guild.members.me.roles.highest.position) {
+          await applicant.roles.add(acceptedRole);
+        }
+      }
+    } catch (e) {
+      logger.warn(`Could not manage roles for applicant ${ticket.userId}: ${e.message}`);
+    }
+
     try {
       await applicant.send({
         embeds: [embeds.applicationResult('accepted', appType, reason, user)]
@@ -316,6 +349,26 @@ async function handleApplicationDeny(interaction, applicationTypeId, userId, rea
 
   const applicant = await guild.members.fetch(ticket.userId).catch(() => null);
   if (applicant) {
+    // Handle role assignments
+    try {
+      // Remove pending role if exists
+      if (appType.pendingRole) {
+        const pendingRole = guild.roles.cache.get(appType.pendingRole);
+        if (pendingRole && applicant.roles.cache.has(pendingRole.id)) {
+          await applicant.roles.remove(pendingRole);
+        }
+      }
+      // Add denied role if configured
+      if (appType.deniedRole) {
+        const deniedRole = guild.roles.cache.get(appType.deniedRole);
+        if (deniedRole && deniedRole.position < guild.members.me.roles.highest.position) {
+          await applicant.roles.add(deniedRole);
+        }
+      }
+    } catch (e) {
+      logger.warn(`Could not manage roles for applicant ${ticket.userId}: ${e.message}`);
+    }
+
     try {
       await applicant.send({
         embeds: [embeds.applicationResult('denied', appType, reason, user)]
