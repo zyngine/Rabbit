@@ -8,8 +8,17 @@ CREATE TABLE IF NOT EXISTS guilds (
   ticket_limit INTEGER DEFAULT 3,
   auto_close_hours INTEGER DEFAULT 0,
   support_roles TEXT,
+  auto_roles TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Add auto_roles column if it doesn't exist (for existing databases)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'guilds' AND column_name = 'auto_roles') THEN
+    ALTER TABLE guilds ADD COLUMN auto_roles TEXT;
+  END IF;
+END $$;
 
 -- Ticket panels
 CREATE TABLE IF NOT EXISTS panels (

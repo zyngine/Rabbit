@@ -231,7 +231,8 @@ router.get('/guild/:guildId/settings', requireAuth, async (req, res) => {
       ticketCategory: guild.ticketCategory,
       ticketLimit: guild.ticketLimit,
       autoCloseHours: guild.autoCloseHours,
-      supportRoles: guild.supportRoles || []
+      supportRoles: guild.supportRoles || [],
+      autoRoles: guild.autoRoles || []
     });
   } catch (error) {
     console.error('Failed to get settings:', error);
@@ -360,6 +361,49 @@ router.delete('/guild/:guildId/support-roles/:roleId', requireAuth, async (req, 
   } catch (error) {
     console.error('Failed to remove support role:', error);
     res.status(500).json({ error: 'Failed to remove support role' });
+  }
+});
+
+// Add auto role
+router.post('/guild/:guildId/auto-roles', requireAuth, async (req, res) => {
+  const { guildId } = req.params;
+  const { roleId } = req.body;
+
+  if (!hasGuildAccess(req, guildId)) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  try {
+    const guild = await Guild.getOrCreate(guildId);
+    await guild.addAutoRole(roleId);
+
+    res.json({ success: true, autoRoles: guild.autoRoles });
+  } catch (error) {
+    console.error('Failed to add auto role:', error);
+    res.status(500).json({ error: 'Failed to add auto role' });
+  }
+});
+
+// Remove auto role
+router.delete('/guild/:guildId/auto-roles/:roleId', requireAuth, async (req, res) => {
+  const { guildId, roleId } = req.params;
+
+  if (!hasGuildAccess(req, guildId)) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  try {
+    const guild = await Guild.get(guildId);
+    if (!guild) {
+      return res.status(404).json({ error: 'Guild not found' });
+    }
+
+    await guild.removeAutoRole(roleId);
+
+    res.json({ success: true, autoRoles: guild.autoRoles });
+  } catch (error) {
+    console.error('Failed to remove auto role:', error);
+    res.status(500).json({ error: 'Failed to remove auto role' });
   }
 });
 

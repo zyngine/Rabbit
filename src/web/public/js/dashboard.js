@@ -1151,6 +1151,36 @@ async function loadSettings() {
             </div>
           </div>
         </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Auto Roles</h3>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Roles automatically assigned to new members when they join</p>
+          </div>
+          <div class="card-body">
+            <div id="auto-roles-list">
+              ${(settings.autoRoles || []).length > 0
+                ? settings.autoRoles.map(roleId => {
+                    const role = guildRoles?.find(r => r.id === roleId);
+                    return `
+                      <div class="role-tag" style="display: inline-flex; align-items: center; gap: 8px; background: var(--bg-tertiary); padding: 6px 12px; border-radius: 6px; margin: 4px;">
+                        <span style="color: ${role?.color || '#fff'}">${role?.name || roleId}</span>
+                        <button class="btn btn-small btn-danger" onclick="removeAutoRole('${roleId}')" style="padding: 2px 6px;">×</button>
+                      </div>
+                    `;
+                  }).join('')
+                : '<p style="color: var(--text-secondary);">No auto roles configured</p>'
+              }
+            </div>
+            <div style="margin-top: 16px; display: flex; gap: 8px;">
+              <select id="add-auto-role" class="input" style="flex: 1;">
+                <option value="">Select a role...</option>
+                ${roleOptions}
+              </select>
+              <button class="btn btn-primary" onclick="addAutoRole()">Add</button>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   } catch (error) {
@@ -1205,6 +1235,24 @@ async function addSupportRole() {
 
 async function removeSupportRole(roleId) {
   await fetch(`/api/guild/${currentGuild.id}/support-roles/${roleId}`, { method: 'DELETE' });
+  loadSettings();
+}
+
+async function addAutoRole() {
+  const roleId = document.getElementById('add-auto-role').value;
+  if (!roleId) return alert('Please select a role');
+
+  await fetch(`/api/guild/${currentGuild.id}/auto-roles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roleId })
+  });
+
+  loadSettings();
+}
+
+async function removeAutoRole(roleId) {
+  await fetch(`/api/guild/${currentGuild.id}/auto-roles/${roleId}`, { method: 'DELETE' });
   loadSettings();
 }
 

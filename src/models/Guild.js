@@ -10,6 +10,7 @@ class Guild {
     this.ticketLimit = data.ticket_limit || 3;
     this.autoCloseHours = data.auto_close_hours || 0;
     this.supportRoles = JSON.parse(data.support_roles || '[]');
+    this.autoRoles = JSON.parse(data.auto_roles || '[]');
     this.createdAt = data.created_at;
   }
 
@@ -34,7 +35,8 @@ class Guild {
       ticket_category: this.ticketCategory,
       ticket_limit: this.ticketLimit,
       auto_close_hours: this.autoCloseHours,
-      support_roles: JSON.stringify(this.supportRoles)
+      support_roles: JSON.stringify(this.supportRoles),
+      auto_roles: JSON.stringify(this.autoRoles)
     });
   }
 
@@ -47,6 +49,18 @@ class Guild {
 
   async removeSupportRole(roleId) {
     this.supportRoles = this.supportRoles.filter(id => id !== roleId);
+    await this.save();
+  }
+
+  async addAutoRole(roleId) {
+    if (!this.autoRoles.includes(roleId)) {
+      this.autoRoles.push(roleId);
+      await this.save();
+    }
+  }
+
+  async removeAutoRole(roleId) {
+    this.autoRoles = this.autoRoles.filter(id => id !== roleId);
     await this.save();
   }
 
