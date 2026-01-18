@@ -306,43 +306,96 @@ function setupTicketFilters() {
 }
 
 function renderPanelsTab(panels) {
-  if (panels.length === 0) {
-    return `
-      <div class="empty-state">
-        <div class="empty-state-icon">📋</div>
-        <p>No ticket panels created yet</p>
-        <p style="color: var(--text-secondary); font-size: 14px;">Use /panel command in Discord to create one</p>
-      </div>
-    `;
-  }
+  const channelOptions = guildChannels?.textChannels?.map(c =>
+    `<option value="${c.id}">#${c.name}</option>`
+  ).join('') || '';
+
+  const categoryOptions = guildChannels?.categories?.map(c =>
+    `<option value="${c.id}">${c.name}</option>`
+  ).join('') || '';
 
   return `
     <div class="card">
+      <div class="card-header">
+        <h3>Ticket Panels</h3>
+        <button class="btn btn-small btn-primary" onclick="showCreatePanelModal()">+ Create Panel</button>
+      </div>
       <div class="card-body">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Type</th>
-              <th>Title</th>
-              <th>Button</th>
-              <th>Created</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${panels.map(panel => `
+        ${panels.length > 0 ? `
+          <table class="table">
+            <thead>
               <tr>
-                <td>${panel.panel_type}</td>
-                <td>${panel.title}</td>
-                <td>${panel.button_label}</td>
-                <td>${new Date(panel.created_at).toLocaleDateString()}</td>
-                <td>
-                  <button class="btn btn-small btn-danger delete-panel" data-id="${panel.id}">Delete</button>
-                </td>
+                <th>Type</th>
+                <th>Title</th>
+                <th>Button</th>
+                <th>Created</th>
+                <th>Actions</th>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              ${panels.map(panel => `
+                <tr>
+                  <td>${panel.panel_type}</td>
+                  <td>${panel.title}</td>
+                  <td>${panel.button_label}</td>
+                  <td>${new Date(panel.created_at).toLocaleDateString()}</td>
+                  <td>
+                    <button class="btn btn-small btn-danger delete-panel" data-id="${panel.id}">Delete</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : '<div class="empty-state"><p>No panels yet. Create one to get started!</p></div>'}
+      </div>
+    </div>
+
+    <div id="create-panel-modal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <h3>Create Ticket Panel</h3>
+        <div class="form-group">
+          <label>Panel Type</label>
+          <input type="text" id="panel-type" placeholder="e.g., support, billing, general" class="input">
+        </div>
+        <div class="form-group">
+          <label>Title</label>
+          <input type="text" id="panel-title" placeholder="Support Tickets" class="input">
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="panel-description" placeholder="Click the button below to create a ticket" class="input"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Button Label</label>
+          <input type="text" id="panel-button" placeholder="Create Ticket" class="input" value="Create Ticket">
+        </div>
+        <div class="form-group">
+          <label>Button Color</label>
+          <select id="panel-color" class="input">
+            <option value="primary">Blue (Primary)</option>
+            <option value="success">Green (Success)</option>
+            <option value="secondary">Gray (Secondary)</option>
+            <option value="danger">Red (Danger)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Channel to Post In</label>
+          <select id="panel-channel" class="input">
+            <option value="">Select a channel...</option>
+            ${channelOptions}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Ticket Category (optional)</label>
+          <select id="panel-category" class="input">
+            <option value="">Use default category</option>
+            ${categoryOptions}
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="hideModal('create-panel-modal')">Cancel</button>
+          <button class="btn btn-primary" onclick="createPanel()">Create Panel</button>
+        </div>
       </div>
     </div>
   `;
@@ -704,6 +757,58 @@ async function deleteQuestion(questionId) {
     method: 'DELETE'
   });
   showQuestionsModal(currentAppTypeId, document.getElementById('questions-app-name').textContent);
+}
+
+function showCreatePanelModal() {
+  document.getElementById('create-panel-modal').style.display = 'flex';
+}
+
+async function createPanel() {
+  const panelType = document.getElementById('panel-type').value;
+  const title = document.getElementById('panel-title').value;
+  const description = document.getElementById('panel-description').value;
+  const buttonLabel = document.getElementById('panel-button').value || 'Create Ticket';
+  const buttonColor = document.getElementById('panel-color').value;
+  const channelId = document.getElementById('panel-channel').value;
+  const categoryId = document.getElementById('panel-category').value;
+
+  if (!panelType) return alert('Please enter a panel type');
+  if (!title) return alert('Please enter a title');
+  if (!channelId) return alert('Please select a channel');
+
+  try {
+    const response = await fetch(`/api/guild/${currentGuild.id}/panels`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        panelType,
+        title,
+        description,
+        buttonLabel,
+        buttonColor,
+        channelId,
+        categoryId: categoryId || null
+      })
+    });
+
+    const result = await response.json();
+    if (response.ok) {
+      hideModal('create-panel-modal');
+      // Clear form
+      document.getElementById('panel-type').value = '';
+      document.getElementById('panel-title').value = '';
+      document.getElementById('panel-description').value = '';
+      document.getElementById('panel-button').value = 'Create Ticket';
+      document.getElementById('panel-channel').value = '';
+      document.getElementById('panel-category').value = '';
+      loadTickets();
+    } else {
+      alert(result.error || 'Failed to create panel');
+    }
+  } catch (error) {
+    console.error('Failed to create panel:', error);
+    alert('Failed to create panel');
+  }
 }
 
 function showCreateAppTypeModal() {

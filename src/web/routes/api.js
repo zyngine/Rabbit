@@ -319,6 +319,70 @@ router.get('/guild/:guildId/panels', requireAuth, (req, res) => {
   res.json(panels);
 });
 
+// Create panel
+router.post('/guild/:guildId/panels', requireAuth, async (req, res) => {
+  const { guildId } = req.params;
+  const { panelType, title, description, buttonLabel, buttonColor, channelId, categoryId } = req.body;
+
+  if (!hasGuildAccess(req, guildId)) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  const discordClient = req.app.get('discordClient');
+  if (!discordClient) {
+    return res.status(500).json({ error: 'Bot not connected' });
+  }
+
+  const guild = discordClient.guilds.cache.get(guildId);
+  if (!guild) {
+    return res.status(404).json({ error: 'Guild not found' });
+  }
+
+  const channel = guild.channels.cache.get(channelId);
+  if (!channel) {
+    return res.status(404).json({ error: 'Channel not found' });
+  }
+
+  try {
+    const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle(title)
+      .setDescription(description || 'Click the button below to create a ticket.')
+      .setFooter({ text: 'Ticket System' });
+
+    const buttonStyles = {
+      'primary': ButtonStyle.Primary,
+      'success': ButtonStyle.Success,
+      'secondary': ButtonStyle.Secondary,
+      'danger': ButtonStyle.Danger
+    };
+
+    const row = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(`create_ticket:${panelType}`)
+          .setLabel(buttonLabel || 'Create Ticket')
+          .setStyle(buttonStyles[buttonColor] || ButtonStyle.Primary)
+          .setEmoji('🎫')
+      );
+
+    const message = await channel.send({ embeds: [embed], components: [row] });
+
+    // Save panel to database
+    db.db.prepare(`
+      INSERT INTO panels (guild_id, channel_id, message_id, panel_type, title, description, button_label, button_color, category_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(guildId, channelId, message.id, panelType, title, description, buttonLabel, buttonColor, categoryId || null);
+
+    res.json({ success: true, messageId: message.id });
+  } catch (error) {
+    console.error('Failed to create panel:', error);
+    res.status(500).json({ error: 'Failed to create panel: ' + error.message });
+  }
+});
+
 // Delete panel
 router.delete('/guild/:guildId/panels/:panelId', requireAuth, (req, res) => {
   const { guildId, panelId } = req.params;
