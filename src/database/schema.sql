@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS panels (
   button_label TEXT,
   button_color TEXT,
   category_id TEXT,
+  style TEXT DEFAULT 'buttons',
+  ticket_types TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

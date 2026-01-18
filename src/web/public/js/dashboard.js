@@ -325,25 +325,27 @@ function renderPanelsTab(panels) {
           <table class="table">
             <thead>
               <tr>
-                <th>Type</th>
                 <th>Title</th>
-                <th>Button</th>
+                <th>Ticket Types</th>
+                <th>Style</th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              ${panels.map(panel => `
+              ${panels.map(panel => {
+                const types = panel.ticket_types ? JSON.parse(panel.ticket_types) : [{ name: panel.panel_type, label: panel.button_label }];
+                return `
                 <tr>
-                  <td>${panel.panel_type}</td>
                   <td>${panel.title}</td>
-                  <td>${panel.button_label}</td>
+                  <td>${types.map(t => t.name).join(', ')}</td>
+                  <td>${panel.style || 'buttons'}</td>
                   <td>${new Date(panel.created_at).toLocaleDateString()}</td>
                   <td>
                     <button class="btn btn-small btn-danger delete-panel" data-id="${panel.id}">Delete</button>
                   </td>
                 </tr>
-              `).join('')}
+              `}).join('')}
             </tbody>
           </table>
         ` : '<div class="empty-state"><p>No panels yet. Create one to get started!</p></div>'}
@@ -351,31 +353,21 @@ function renderPanelsTab(panels) {
     </div>
 
     <div id="create-panel-modal" class="modal" style="display:none;">
-      <div class="modal-content">
+      <div class="modal-content" style="max-width: 600px;">
         <h3>Create Ticket Panel</h3>
         <div class="form-group">
-          <label>Panel Type</label>
-          <input type="text" id="panel-type" placeholder="e.g., support, billing, general" class="input">
-        </div>
-        <div class="form-group">
-          <label>Title</label>
+          <label>Panel Title</label>
           <input type="text" id="panel-title" placeholder="Support Tickets" class="input">
         </div>
         <div class="form-group">
           <label>Description</label>
-          <textarea id="panel-description" placeholder="Click the button below to create a ticket" class="input"></textarea>
+          <textarea id="panel-description" placeholder="Select a category below to create a ticket" class="input"></textarea>
         </div>
         <div class="form-group">
-          <label>Button Label</label>
-          <input type="text" id="panel-button" placeholder="Create Ticket" class="input" value="Create Ticket">
-        </div>
-        <div class="form-group">
-          <label>Button Color</label>
-          <select id="panel-color" class="input">
-            <option value="primary">Blue (Primary)</option>
-            <option value="success">Green (Success)</option>
-            <option value="secondary">Gray (Secondary)</option>
-            <option value="danger">Red (Danger)</option>
+          <label>Display Style</label>
+          <select id="panel-style" class="input">
+            <option value="buttons">Buttons (up to 5 types)</option>
+            <option value="select">Dropdown Menu (up to 25 types)</option>
           </select>
         </div>
         <div class="form-group">
@@ -386,12 +378,21 @@ function renderPanelsTab(panels) {
           </select>
         </div>
         <div class="form-group">
-          <label>Ticket Category (optional)</label>
+          <label>Default Ticket Category (optional)</label>
           <select id="panel-category" class="input">
-            <option value="">Use default category</option>
+            <option value="">Use server default</option>
             ${categoryOptions}
           </select>
         </div>
+
+        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <label style="margin: 0; font-weight: 600;">Ticket Types</label>
+            <button class="btn btn-small btn-secondary" onclick="addTicketType()">+ Add Type</button>
+          </div>
+          <div id="ticket-types-list"></div>
+        </div>
+
         <div class="modal-actions">
           <button class="btn btn-secondary" onclick="hideModal('create-panel-modal')">Cancel</button>
           <button class="btn btn-primary" onclick="createPanel()">Create Panel</button>
@@ -411,6 +412,12 @@ function setupPanelActions() {
       loadTickets();
     });
   });
+
+  // Setup style change listener
+  const styleSelect = document.getElementById('panel-style');
+  if (styleSelect) {
+    styleSelect.addEventListener('change', renderTicketTypesList);
+  }
 }
 
 function renderBlacklistTab(blacklist) {
@@ -759,35 +766,121 @@ async function deleteQuestion(questionId) {
   showQuestionsModal(currentAppTypeId, document.getElementById('questions-app-name').textContent);
 }
 
+let panelTicketTypes = [];
+
 function showCreatePanelModal() {
+  panelTicketTypes = [];
+  document.getElementById('ticket-types-list').innerHTML = '<p style="color: var(--text-secondary);">No ticket types added. Click "Add Type" to add one.</p>';
   document.getElementById('create-panel-modal').style.display = 'flex';
 }
 
+function addTicketType() {
+  const style = document.getElementById('panel-style').value;
+  const maxTypes = style === 'buttons' ? 5 : 25;
+
+  if (panelTicketTypes.length >= maxTypes) {
+    return alert(`Maximum ${maxTypes} ticket types for ${style} style`);
+  }
+
+  panelTicketTypes.push({
+    id: Date.now(),
+    name: '',
+    label: '',
+    description: '',
+    emoji: '',
+    color: 'primary'
+  });
+
+  renderTicketTypesList();
+}
+
+function removeTicketType(id) {
+  panelTicketTypes = panelTicketTypes.filter(t => t.id !== id);
+  renderTicketTypesList();
+}
+
+function updateTicketType(id, field, value) {
+  const type = panelTicketTypes.find(t => t.id === id);
+  if (type) {
+    type[field] = value;
+  }
+}
+
+function renderTicketTypesList() {
+  const list = document.getElementById('ticket-types-list');
+  const style = document.getElementById('panel-style').value;
+
+  if (panelTicketTypes.length === 0) {
+    list.innerHTML = '<p style="color: var(--text-secondary);">No ticket types added. Click "Add Type" to add one.</p>';
+    return;
+  }
+
+  list.innerHTML = panelTicketTypes.map((type, index) => `
+    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span style="font-weight: 500;">Type ${index + 1}</span>
+        <button class="btn btn-small btn-danger" onclick="removeTicketType(${type.id})">Remove</button>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <input type="text" placeholder="Type Name (e.g., support)" class="input"
+          value="${type.name}" onchange="updateTicketType(${type.id}, 'name', this.value)">
+        <input type="text" placeholder="Button/Option Label" class="input"
+          value="${type.label}" onchange="updateTicketType(${type.id}, 'label', this.value)">
+      </div>
+      <div style="display: grid; grid-template-columns: ${style === 'buttons' ? '1fr 1fr' : '2fr 1fr'}; gap: 8px; margin-top: 8px;">
+        ${style === 'select' ? `
+          <input type="text" placeholder="Description (optional)" class="input"
+            value="${type.description}" onchange="updateTicketType(${type.id}, 'description', this.value)">
+        ` : ''}
+        <input type="text" placeholder="Emoji (optional)" class="input" style="max-width: 120px;"
+          value="${type.emoji}" onchange="updateTicketType(${type.id}, 'emoji', this.value)">
+        ${style === 'buttons' ? `
+          <select class="input" onchange="updateTicketType(${type.id}, 'color', this.value)">
+            <option value="primary" ${type.color === 'primary' ? 'selected' : ''}>Blue</option>
+            <option value="success" ${type.color === 'success' ? 'selected' : ''}>Green</option>
+            <option value="secondary" ${type.color === 'secondary' ? 'selected' : ''}>Gray</option>
+            <option value="danger" ${type.color === 'danger' ? 'selected' : ''}>Red</option>
+          </select>
+        ` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
 async function createPanel() {
-  const panelType = document.getElementById('panel-type').value;
   const title = document.getElementById('panel-title').value;
   const description = document.getElementById('panel-description').value;
-  const buttonLabel = document.getElementById('panel-button').value || 'Create Ticket';
-  const buttonColor = document.getElementById('panel-color').value;
+  const style = document.getElementById('panel-style').value;
   const channelId = document.getElementById('panel-channel').value;
   const categoryId = document.getElementById('panel-category').value;
 
-  if (!panelType) return alert('Please enter a panel type');
   if (!title) return alert('Please enter a title');
   if (!channelId) return alert('Please select a channel');
+  if (panelTicketTypes.length === 0) return alert('Please add at least one ticket type');
+
+  // Validate ticket types
+  for (const type of panelTicketTypes) {
+    if (!type.name) return alert('All ticket types must have a name');
+    if (!type.label) return alert('All ticket types must have a label');
+  }
 
   try {
     const response = await fetch(`/api/guild/${currentGuild.id}/panels`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        panelType,
         title,
         description,
-        buttonLabel,
-        buttonColor,
+        style,
         channelId,
-        categoryId: categoryId || null
+        categoryId: categoryId || null,
+        ticketTypes: panelTicketTypes.map(t => ({
+          name: t.name,
+          label: t.label,
+          description: t.description,
+          emoji: t.emoji,
+          color: t.color
+        }))
       })
     });
 
@@ -795,12 +888,11 @@ async function createPanel() {
     if (response.ok) {
       hideModal('create-panel-modal');
       // Clear form
-      document.getElementById('panel-type').value = '';
       document.getElementById('panel-title').value = '';
       document.getElementById('panel-description').value = '';
-      document.getElementById('panel-button').value = 'Create Ticket';
       document.getElementById('panel-channel').value = '';
       document.getElementById('panel-category').value = '';
+      panelTicketTypes = [];
       loadTickets();
     } else {
       alert(result.error || 'Failed to create panel');

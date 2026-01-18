@@ -25,6 +25,8 @@ module.exports = {
         await handleCommand(interaction);
       } else if (interaction.isButton()) {
         await handleButton(interaction);
+      } else if (interaction.isStringSelectMenu()) {
+        await handleSelectMenu(interaction);
       } else if (interaction.isModalSubmit()) {
         await handleModal(interaction);
       }
@@ -64,6 +66,9 @@ async function handleButton(interaction) {
 
   if (customId === 'ticket_create') {
     await handleTicketCreate(interaction);
+  } else if (customId.startsWith('create_ticket:')) {
+    const panelType = customId.replace('create_ticket:', '');
+    await handleTicketCreate(interaction, panelType);
   } else if (customId === 'ticket_close') {
     await handleTicketClose(interaction);
   } else if (customId === 'ticket_claim') {
@@ -93,5 +98,20 @@ async function handleModal(interaction) {
   if (customId.startsWith('application_submit_')) {
     const appTypeId = parseInt(customId.replace('application_submit_', ''));
     await handleApplicationSubmit(interaction, appTypeId);
+  }
+}
+
+async function handleSelectMenu(interaction) {
+  const customId = interaction.customId;
+  const value = interaction.values[0];
+
+  logger.info(`SelectMenu: ${customId} value: ${value} by ${interaction.user.tag}`);
+
+  if (customId === 'ticket_select') {
+    // Value format: create_ticket:type
+    if (value.startsWith('create_ticket:')) {
+      const panelType = value.replace('create_ticket:', '');
+      await handleTicketCreate(interaction, panelType);
+    }
   }
 }

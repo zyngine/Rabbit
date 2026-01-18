@@ -17,7 +17,27 @@ function initializeDatabase() {
   const schemaPath = path.join(__dirname, 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
   db.exec(schema);
+
+  // Run migrations for existing databases
+  runMigrations();
+
   console.log('[Database] Initialized successfully');
+}
+
+function runMigrations() {
+  // Add style and ticket_types columns to panels table if they don't exist
+  const panelColumns = db.prepare("PRAGMA table_info(panels)").all();
+  const columnNames = panelColumns.map(c => c.name);
+
+  if (!columnNames.includes('style')) {
+    db.exec("ALTER TABLE panels ADD COLUMN style TEXT DEFAULT 'buttons'");
+    console.log('[Database] Added style column to panels table');
+  }
+
+  if (!columnNames.includes('ticket_types')) {
+    db.exec("ALTER TABLE panels ADD COLUMN ticket_types TEXT");
+    console.log('[Database] Added ticket_types column to panels table');
+  }
 }
 
 function getGuild(guildId) {

@@ -319,13 +319,17 @@ router.get('/guild/:guildId/panels', requireAuth, (req, res) => {
   res.json(panels);
 });
 
-// Create panel
+// Create panel with multiple ticket types
 router.post('/guild/:guildId/panels', requireAuth, async (req, res) => {
   const { guildId } = req.params;
-  const { panelType, title, description, buttonLabel, buttonColor, channelId, categoryId } = req.body;
+  const { title, description, style, channelId, categoryId, ticketTypes } = req.body;
 
   if (!hasGuildAccess(req, guildId)) {
     return res.status(403).json({ error: 'Access denied' });
+  }
+
+  if (!ticketTypes || ticketTypes.length === 0) {
+    return res.status(400).json({ error: 'At least one ticket type is required' });
   }
 
   const discordClient = req.app.get('discordClient');
@@ -344,12 +348,12 @@ router.post('/guild/:guildId/panels', requireAuth, async (req, res) => {
   }
 
   try {
-    const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+    const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 
     const embed = new EmbedBuilder()
       .setColor(0x5865F2)
       .setTitle(title)
-      .setDescription(description || 'Click the button below to create a ticket.')
+      .setDescription(description || 'Select a category below to create a ticket.')
       .setFooter({ text: 'Ticket System' });
 
     const buttonStyles = {
@@ -359,22 +363,65 @@ router.post('/guild/:guildId/panels', requireAuth, async (req, res) => {
       'danger': ButtonStyle.Danger
     };
 
-    const row = new ActionRowBuilder()
-      .addComponents(
-        new ButtonBuilder()
-          .setCustomId(`create_ticket:${panelType}`)
-          .setLabel(buttonLabel || 'Create Ticket')
-          .setStyle(buttonStyles[buttonColor] || ButtonStyle.Primary)
-          .setEmoji('🎫')
-      );
+    let components = [];
 
-    const message = await channel.send({ embeds: [embed], components: [row] });
+    if (style === 'select') {
+      // Create a select menu
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('ticket_select')
+        .setPlaceholder('Select a ticket type...')
+        .addOptions(ticketTypes.map(type => ({
+          label: type.label,
+          value: `create_ticket:${type.name}`,
+          description: type.description || undefined,
+          emoji: type.emoji || undefined
+        })));
 
-    // Save panel to database
+      components.push(new ActionRowBuilder().addComponents(selectMenu));
+    } else {
+      // Create buttons (max 5 per row)
+      const rows = [];
+      for (let i = 0; i < ticketTypes.length; i += 5) {
+        const rowTypes = ticketTypes.slice(i, i + 5);
+        const row = new ActionRowBuilder();
+
+        rowTypes.forEach(type => {
+          const button = new ButtonBuilder()
+            .setCustomId(`create_ticket:${type.name}`)
+            .setLabel(type.label)
+            .setStyle(buttonStyles[type.color] || ButtonStyle.Primary);
+
+          if (type.emoji) {
+            button.setEmoji(type.emoji);
+          }
+
+          row.addComponents(button);
+        });
+
+        rows.push(row);
+      }
+      components = rows;
+    }
+
+    const message = await channel.send({ embeds: [embed], components });
+
+    // Save panel to database with ticket types as JSON
     db.db.prepare(`
-      INSERT INTO panels (guild_id, channel_id, message_id, panel_type, title, description, button_label, button_color, category_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(guildId, channelId, message.id, panelType, title, description, buttonLabel, buttonColor, categoryId || null);
+      INSERT INTO panels (guild_id, channel_id, message_id, panel_type, title, description, button_label, button_color, category_id, style, ticket_types)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      guildId,
+      channelId,
+      message.id,
+      ticketTypes[0].name, // Primary type for backwards compatibility
+      title,
+      description,
+      ticketTypes[0].label,
+      ticketTypes[0].color || 'primary',
+      categoryId || null,
+      style,
+      JSON.stringify(ticketTypes)
+    );
 
     res.json({ success: true, messageId: message.id });
   } catch (error) {

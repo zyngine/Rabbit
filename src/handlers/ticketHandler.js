@@ -14,7 +14,7 @@ const { generateTranscript } = require('../utils/transcript');
 const config = require('../config');
 const logger = require('../utils/logger');
 
-async function handleTicketCreate(interaction) {
+async function handleTicketCreate(interaction, panelType = null) {
   const { guild, user, message } = interaction;
 
   await interaction.deferReply({ ephemeral: true });
@@ -27,6 +27,9 @@ async function handleTicketCreate(interaction) {
       embeds: [embeds.error('This ticket panel no longer exists.')]
     });
   }
+
+  // Use the panelType passed in (from button customId or select menu value)
+  const ticketType = panelType || panel.panel_type;
 
   const blacklisted = db.isBlacklisted(guild.id, user.id);
   if (blacklisted) {
@@ -89,7 +92,7 @@ async function handleTicketCreate(interaction) {
       guild_id: guild.id,
       channel_id: channel.id,
       user_id: user.id,
-      panel_type: panel.panel_type,
+      panel_type: ticketType,
       ticket_number: ticketNumber
     });
 
@@ -108,7 +111,7 @@ async function handleTicketCreate(interaction) {
 
     await channel.send({
       content: `${user} Welcome to your ticket!`,
-      embeds: [embeds.ticketWelcome(ticket, user, panel.panel_type)],
+      embeds: [embeds.ticketWelcome(ticket, user, ticketType)],
       components: [ticketButtons]
     });
 
