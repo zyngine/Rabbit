@@ -51,46 +51,56 @@ router.get('/guilds', requireAuth, (req, res) => {
   res.json(userGuilds);
 });
 
-router.get('/guild/:guildId/stats', requireAuth, (req, res) => {
+router.get('/guild/:guildId/stats', requireAuth, async (req, res) => {
   const { guildId } = req.params;
 
   if (!hasGuildAccess(req, guildId)) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const guild = Guild.getOrCreate(guildId);
+  try {
+    const guild = await Guild.getOrCreate(guildId);
 
-  const openTickets = db.db.prepare(`
-    SELECT COUNT(*) as count FROM tickets WHERE guild_id = ? AND status = 'open'
-  `).get(guildId);
+    const openTickets = await db.query(
+      'SELECT COUNT(*) as count FROM tickets WHERE guild_id = $1 AND status = $2',
+      [guildId, 'open']
+    );
 
-  const closedTickets = db.db.prepare(`
-    SELECT COUNT(*) as count FROM tickets WHERE guild_id = ? AND status = 'closed'
-  `).get(guildId);
+    const closedTickets = await db.query(
+      'SELECT COUNT(*) as count FROM tickets WHERE guild_id = $1 AND status = $2',
+      [guildId, 'closed']
+    );
 
-  const avgRating = db.db.prepare(`
-    SELECT AVG(rating) as avg FROM tickets WHERE guild_id = ? AND rating IS NOT NULL
-  `).get(guildId);
+    const avgRating = await db.query(
+      'SELECT AVG(rating) as avg FROM tickets WHERE guild_id = $1 AND rating IS NOT NULL',
+      [guildId]
+    );
 
-  const pendingApps = db.db.prepare(`
-    SELECT COUNT(*) as count FROM applications WHERE guild_id = ? AND status = 'pending'
-  `).get(guildId);
+    const pendingApps = await db.query(
+      'SELECT COUNT(*) as count FROM applications WHERE guild_id = $1 AND status = $2',
+      [guildId, 'pending']
+    );
 
-  const recentTickets = db.db.prepare(`
-    SELECT * FROM tickets WHERE guild_id = ? ORDER BY created_at DESC LIMIT 5
-  `).all(guildId);
+    const recentTickets = await db.query(
+      'SELECT * FROM tickets WHERE guild_id = $1 ORDER BY created_at DESC LIMIT 5',
+      [guildId]
+    );
 
-  res.json({
-    openTickets: openTickets.count,
-    closedTickets: closedTickets.count,
-    totalTickets: guild.ticketCounter,
-    avgRating: avgRating.avg ? Math.round(avgRating.avg * 10) / 10 : null,
-    pendingApplications: pendingApps.count,
-    recentTickets
-  });
+    res.json({
+      openTickets: parseInt(openTickets.rows[0].count),
+      closedTickets: parseInt(closedTickets.rows[0].count),
+      totalTickets: guild.ticketCounter,
+      avgRating: avgRating.rows[0].avg ? Math.round(parseFloat(avgRating.rows[0].avg) * 10) / 10 : null,
+      pendingApplications: parseInt(pendingApps.rows[0].count),
+      recentTickets: recentTickets.rows
+    });
+  } catch (error) {
+    console.error('Failed to get stats:', error);
+    res.status(500).json({ error: 'Failed to get stats' });
+  }
 });
 
-router.get('/guild/:guildId/tickets', requireAuth, (req, res) => {
+router.get('/guild/:guildId/tickets', requireAuth, async (req, res) => {
   const { guildId } = req.params;
   const { status, page = 1, limit = 20 } = req.query;
 
@@ -98,34 +108,41 @@ router.get('/guild/:guildId/tickets', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  let query = 'SELECT * FROM tickets WHERE guild_id = ?';
-  const params = [guildId];
+  try {
+    let query = 'SELECT * FROM tickets WHERE guild_id = $1';
+    const params = [guildId];
+    let paramIndex = 2;
 
-  if (status) {
-    query += ' AND status = ?';
-    params.push(status);
+    if (status) {
+      query += ` AND status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
+
+    const tickets = await db.query(query, params);
+
+    const countQuery = status
+      ? 'SELECT COUNT(*) as count FROM tickets WHERE guild_id = $1 AND status = $2'
+      : 'SELECT COUNT(*) as count FROM tickets WHERE guild_id = $1';
+    const countParams = status ? [guildId, status] : [guildId];
+    const total = await db.query(countQuery, countParams);
+
+    res.json({
+      tickets: tickets.rows,
+      total: parseInt(total.rows[0].count),
+      page: parseInt(page),
+      totalPages: Math.ceil(parseInt(total.rows[0].count) / parseInt(limit))
+    });
+  } catch (error) {
+    console.error('Failed to get tickets:', error);
+    res.status(500).json({ error: 'Failed to get tickets' });
   }
-
-  query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-  params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
-
-  const tickets = db.db.prepare(query).all(...params);
-
-  const countQuery = status
-    ? 'SELECT COUNT(*) as count FROM tickets WHERE guild_id = ? AND status = ?'
-    : 'SELECT COUNT(*) as count FROM tickets WHERE guild_id = ?';
-  const countParams = status ? [guildId, status] : [guildId];
-  const total = db.db.prepare(countQuery).get(...countParams);
-
-  res.json({
-    tickets,
-    total: total.count,
-    page: parseInt(page),
-    totalPages: Math.ceil(total.count / parseInt(limit))
-  });
 });
 
-router.get('/guild/:guildId/applications', requireAuth, (req, res) => {
+router.get('/guild/:guildId/applications', requireAuth, async (req, res) => {
   const { guildId } = req.params;
   const { status, page = 1, limit = 20 } = req.query;
 
@@ -133,90 +150,119 @@ router.get('/guild/:guildId/applications', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  let query = 'SELECT * FROM applications WHERE guild_id = ?';
-  const params = [guildId];
+  try {
+    let query = 'SELECT * FROM applications WHERE guild_id = $1';
+    const params = [guildId];
+    let paramIndex = 2;
 
-  if (status) {
-    query += ' AND status = ?';
-    params.push(status);
+    if (status) {
+      query += ` AND status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
+
+    const applications = await db.query(query, params);
+
+    const countQuery = status
+      ? 'SELECT COUNT(*) as count FROM applications WHERE guild_id = $1 AND status = $2'
+      : 'SELECT COUNT(*) as count FROM applications WHERE guild_id = $1';
+    const countParams = status ? [guildId, status] : [guildId];
+    const total = await db.query(countQuery, countParams);
+
+    res.json({
+      applications: applications.rows,
+      total: parseInt(total.rows[0].count),
+      page: parseInt(page),
+      totalPages: Math.ceil(parseInt(total.rows[0].count) / parseInt(limit))
+    });
+  } catch (error) {
+    console.error('Failed to get applications:', error);
+    res.status(500).json({ error: 'Failed to get applications' });
   }
-
-  query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-  params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
-
-  const applications = db.db.prepare(query).all(...params);
-
-  const countQuery = status
-    ? 'SELECT COUNT(*) as count FROM applications WHERE guild_id = ? AND status = ?'
-    : 'SELECT COUNT(*) as count FROM applications WHERE guild_id = ?';
-  const countParams = status ? [guildId, status] : [guildId];
-  const total = db.db.prepare(countQuery).get(...countParams);
-
-  res.json({
-    applications,
-    total: total.count,
-    page: parseInt(page),
-    totalPages: Math.ceil(total.count / parseInt(limit))
-  });
 });
 
-router.get('/guild/:guildId/application-types', requireAuth, (req, res) => {
+router.get('/guild/:guildId/application-types', requireAuth, async (req, res) => {
   const { guildId } = req.params;
 
   if (!hasGuildAccess(req, guildId)) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const types = ApplicationType.getAll(guildId);
-  res.json(types.map(t => ({
-    id: t.id,
-    name: t.name,
-    description: t.description,
-    active: t.active,
-    cooldownHours: t.cooldownHours,
-    createTicket: t.createTicket,
-    questionCount: t.getQuestions().length
-  })));
+  try {
+    const types = await ApplicationType.getAll(guildId);
+    const result = [];
+
+    for (const t of types) {
+      const questions = await t.getQuestions();
+      result.push({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        active: t.active,
+        cooldownHours: t.cooldownHours,
+        createTicket: t.createTicket,
+        questionCount: questions.length
+      });
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Failed to get application types:', error);
+    res.status(500).json({ error: 'Failed to get application types' });
+  }
 });
 
-router.get('/guild/:guildId/settings', requireAuth, (req, res) => {
+router.get('/guild/:guildId/settings', requireAuth, async (req, res) => {
   const { guildId } = req.params;
 
   if (!hasGuildAccess(req, guildId)) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const guild = Guild.getOrCreate(guildId);
+  try {
+    const guild = await Guild.getOrCreate(guildId);
 
-  res.json({
-    ticketLogChannel: guild.ticketLogChannel,
-    ticketTranscriptChannel: guild.ticketTranscriptChannel,
-    ticketCategory: guild.ticketCategory,
-    ticketLimit: guild.ticketLimit,
-    autoCloseHours: guild.autoCloseHours,
-    supportRoles: guild.supportRoles || []
-  });
+    res.json({
+      ticketLogChannel: guild.ticketLogChannel,
+      ticketTranscriptChannel: guild.ticketTranscriptChannel,
+      ticketCategory: guild.ticketCategory,
+      ticketLimit: guild.ticketLimit,
+      autoCloseHours: guild.autoCloseHours,
+      supportRoles: guild.supportRoles || []
+    });
+  } catch (error) {
+    console.error('Failed to get settings:', error);
+    res.status(500).json({ error: 'Failed to get settings' });
+  }
 });
 
-router.post('/guild/:guildId/settings', requireAuth, (req, res) => {
+router.post('/guild/:guildId/settings', requireAuth, async (req, res) => {
   const { guildId } = req.params;
 
   if (!hasGuildAccess(req, guildId)) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const guild = Guild.getOrCreate(guildId);
-  const { ticketLimit, autoCloseHours, ticketLogChannel, ticketTranscriptChannel, ticketCategory } = req.body;
+  try {
+    const guild = await Guild.getOrCreate(guildId);
+    const { ticketLimit, autoCloseHours, ticketLogChannel, ticketTranscriptChannel, ticketCategory } = req.body;
 
-  if (ticketLimit !== undefined) guild.ticketLimit = ticketLimit;
-  if (autoCloseHours !== undefined) guild.autoCloseHours = autoCloseHours;
-  if (ticketLogChannel !== undefined) guild.ticketLogChannel = ticketLogChannel;
-  if (ticketTranscriptChannel !== undefined) guild.ticketTranscriptChannel = ticketTranscriptChannel;
-  if (ticketCategory !== undefined) guild.ticketCategory = ticketCategory;
+    if (ticketLimit !== undefined) guild.ticketLimit = ticketLimit;
+    if (autoCloseHours !== undefined) guild.autoCloseHours = autoCloseHours;
+    if (ticketLogChannel !== undefined) guild.ticketLogChannel = ticketLogChannel;
+    if (ticketTranscriptChannel !== undefined) guild.ticketTranscriptChannel = ticketTranscriptChannel;
+    if (ticketCategory !== undefined) guild.ticketCategory = ticketCategory;
 
-  guild.save();
+    await guild.save();
 
-  res.json({ success: true });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to save settings:', error);
+    res.status(500).json({ error: 'Failed to save settings' });
+  }
 });
 
 // Get guild channels from Discord
@@ -275,7 +321,7 @@ router.get('/guild/:guildId/roles', requireAuth, (req, res) => {
 });
 
 // Add support role
-router.post('/guild/:guildId/support-roles', requireAuth, (req, res) => {
+router.post('/guild/:guildId/support-roles', requireAuth, async (req, res) => {
   const { guildId } = req.params;
   const { roleId } = req.body;
 
@@ -283,40 +329,55 @@ router.post('/guild/:guildId/support-roles', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const guild = Guild.getOrCreate(guildId);
-  guild.addSupportRole(roleId);
+  try {
+    const guild = await Guild.getOrCreate(guildId);
+    await guild.addSupportRole(roleId);
 
-  res.json({ success: true, supportRoles: guild.supportRoles });
+    res.json({ success: true, supportRoles: guild.supportRoles });
+  } catch (error) {
+    console.error('Failed to add support role:', error);
+    res.status(500).json({ error: 'Failed to add support role' });
+  }
 });
 
 // Remove support role
-router.delete('/guild/:guildId/support-roles/:roleId', requireAuth, (req, res) => {
+router.delete('/guild/:guildId/support-roles/:roleId', requireAuth, async (req, res) => {
   const { guildId, roleId } = req.params;
 
   if (!hasGuildAccess(req, guildId)) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const guild = Guild.get(guildId);
-  if (!guild) {
-    return res.status(404).json({ error: 'Guild not found' });
+  try {
+    const guild = await Guild.get(guildId);
+    if (!guild) {
+      return res.status(404).json({ error: 'Guild not found' });
+    }
+
+    await guild.removeSupportRole(roleId);
+
+    res.json({ success: true, supportRoles: guild.supportRoles });
+  } catch (error) {
+    console.error('Failed to remove support role:', error);
+    res.status(500).json({ error: 'Failed to remove support role' });
   }
-
-  guild.removeSupportRole(roleId);
-
-  res.json({ success: true, supportRoles: guild.supportRoles });
 });
 
 // Get panels
-router.get('/guild/:guildId/panels', requireAuth, (req, res) => {
+router.get('/guild/:guildId/panels', requireAuth, async (req, res) => {
   const { guildId } = req.params;
 
   if (!hasGuildAccess(req, guildId)) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const panels = db.getPanelsByGuild(guildId);
-  res.json(panels);
+  try {
+    const panels = await db.getPanelsByGuild(guildId);
+    res.json(panels);
+  } catch (error) {
+    console.error('Failed to get panels:', error);
+    res.status(500).json({ error: 'Failed to get panels' });
+  }
 });
 
 // Create panel with multiple ticket types
@@ -406,21 +467,22 @@ router.post('/guild/:guildId/panels', requireAuth, async (req, res) => {
     const message = await channel.send({ embeds: [embed], components });
 
     // Save panel to database with ticket types as JSON
-    db.db.prepare(`
-      INSERT INTO panels (guild_id, channel_id, message_id, panel_type, title, description, button_label, button_color, category_id, style, ticket_types)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      guildId,
-      channelId,
-      message.id,
-      ticketTypes[0].name, // Primary type for backwards compatibility
-      title,
-      description,
-      ticketTypes[0].label,
-      ticketTypes[0].color || 'primary',
-      categoryId || null,
-      style,
-      JSON.stringify(ticketTypes)
+    await db.query(
+      `INSERT INTO panels (guild_id, channel_id, message_id, panel_type, title, description, button_label, button_color, category_id, style, ticket_types)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [
+        guildId,
+        channelId,
+        message.id,
+        ticketTypes[0].name, // Primary type for backwards compatibility
+        title,
+        description,
+        ticketTypes[0].label,
+        ticketTypes[0].color || 'primary',
+        categoryId || null,
+        style,
+        JSON.stringify(ticketTypes)
+      ]
     );
 
     res.json({ success: true, messageId: message.id });
@@ -431,19 +493,24 @@ router.post('/guild/:guildId/panels', requireAuth, async (req, res) => {
 });
 
 // Delete panel
-router.delete('/guild/:guildId/panels/:panelId', requireAuth, (req, res) => {
+router.delete('/guild/:guildId/panels/:panelId', requireAuth, async (req, res) => {
   const { guildId, panelId } = req.params;
 
   if (!hasGuildAccess(req, guildId)) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  db.deletePanel(panelId);
-  res.json({ success: true });
+  try {
+    await db.deletePanel(panelId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to delete panel:', error);
+    res.status(500).json({ error: 'Failed to delete panel' });
+  }
 });
 
 // Create application type
-router.post('/guild/:guildId/application-types', requireAuth, (req, res) => {
+router.post('/guild/:guildId/application-types', requireAuth, async (req, res) => {
   const { guildId } = req.params;
   const { name, description, cooldownHours, createTicket } = req.body;
 
@@ -456,12 +523,12 @@ router.post('/guild/:guildId/application-types', requireAuth, (req, res) => {
   }
 
   try {
-    const existing = ApplicationType.getByName(guildId, name);
+    const existing = await ApplicationType.getByName(guildId, name);
     if (existing) {
       return res.status(400).json({ error: 'Application type with this name already exists' });
     }
 
-    const appType = ApplicationType.create({
+    const appType = await ApplicationType.create({
       guild_id: guildId,
       name: name.trim(),
       description: description || '',
@@ -481,7 +548,7 @@ router.post('/guild/:guildId/application-types', requireAuth, (req, res) => {
 });
 
 // Update application type
-router.put('/guild/:guildId/application-types/:typeId', requireAuth, (req, res) => {
+router.put('/guild/:guildId/application-types/:typeId', requireAuth, async (req, res) => {
   const { guildId, typeId } = req.params;
   const { name, description, cooldownHours, createTicket, active } = req.body;
 
@@ -489,38 +556,48 @@ router.put('/guild/:guildId/application-types/:typeId', requireAuth, (req, res) 
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const appType = ApplicationType.get(typeId);
-  if (!appType || appType.guildId !== guildId) {
-    return res.status(404).json({ error: 'Application type not found' });
+  try {
+    const appType = await ApplicationType.get(typeId);
+    if (!appType || appType.guildId !== guildId) {
+      return res.status(404).json({ error: 'Application type not found' });
+    }
+
+    if (name !== undefined) appType.name = name;
+    if (description !== undefined) appType.description = description;
+    if (cooldownHours !== undefined) appType.cooldownHours = cooldownHours;
+    if (createTicket !== undefined) appType.createTicket = createTicket;
+    if (active !== undefined) appType.active = active;
+
+    await appType.save();
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to update application type:', error);
+    res.status(500).json({ error: 'Failed to update application type' });
   }
-
-  if (name !== undefined) appType.name = name;
-  if (description !== undefined) appType.description = description;
-  if (cooldownHours !== undefined) appType.cooldownHours = cooldownHours;
-  if (createTicket !== undefined) appType.createTicket = createTicket;
-  if (active !== undefined) appType.active = active;
-
-  appType.save();
-
-  res.json({ success: true });
 });
 
 // Delete application type
-router.delete('/guild/:guildId/application-types/:typeId', requireAuth, (req, res) => {
+router.delete('/guild/:guildId/application-types/:typeId', requireAuth, async (req, res) => {
   const { guildId, typeId } = req.params;
 
   if (!hasGuildAccess(req, guildId)) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const appType = ApplicationType.get(typeId);
-  if (!appType || appType.guildId !== guildId) {
-    return res.status(404).json({ error: 'Application type not found' });
+  try {
+    const appType = await ApplicationType.get(typeId);
+    if (!appType || appType.guildId !== guildId) {
+      return res.status(404).json({ error: 'Application type not found' });
+    }
+
+    await appType.delete();
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to delete application type:', error);
+    res.status(500).json({ error: 'Failed to delete application type' });
   }
-
-  appType.delete();
-
-  res.json({ success: true });
 });
 
 // Deploy application panel to a channel
@@ -532,27 +609,27 @@ router.post('/guild/:guildId/application-types/:typeId/deploy', requireAuth, asy
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const appType = ApplicationType.get(typeId);
-  if (!appType || appType.guildId !== guildId) {
-    return res.status(404).json({ error: 'Application type not found' });
-  }
-
-  const discordClient = req.app.get('discordClient');
-  if (!discordClient) {
-    return res.status(500).json({ error: 'Bot not connected' });
-  }
-
-  const guild = discordClient.guilds.cache.get(guildId);
-  if (!guild) {
-    return res.status(404).json({ error: 'Guild not found' });
-  }
-
-  const channel = guild.channels.cache.get(channelId);
-  if (!channel) {
-    return res.status(404).json({ error: 'Channel not found' });
-  }
-
   try {
+    const appType = await ApplicationType.get(typeId);
+    if (!appType || appType.guildId !== guildId) {
+      return res.status(404).json({ error: 'Application type not found' });
+    }
+
+    const discordClient = req.app.get('discordClient');
+    if (!discordClient) {
+      return res.status(500).json({ error: 'Bot not connected' });
+    }
+
+    const guild = discordClient.guilds.cache.get(guildId);
+    if (!guild) {
+      return res.status(404).json({ error: 'Guild not found' });
+    }
+
+    const channel = guild.channels.cache.get(channelId);
+    if (!channel) {
+      return res.status(404).json({ error: 'Channel not found' });
+    }
+
     const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
     const embed = new EmbedBuilder()
@@ -575,7 +652,7 @@ router.post('/guild/:guildId/application-types/:typeId/deploy', requireAuth, asy
     // Update application type with channel and message info
     appType.channelId = channelId;
     appType.messageId = message.id;
-    appType.save();
+    await appType.save();
 
     res.json({ success: true, messageId: message.id });
   } catch (error) {
@@ -585,24 +662,29 @@ router.post('/guild/:guildId/application-types/:typeId/deploy', requireAuth, asy
 });
 
 // Get questions for application type
-router.get('/guild/:guildId/application-types/:typeId/questions', requireAuth, (req, res) => {
+router.get('/guild/:guildId/application-types/:typeId/questions', requireAuth, async (req, res) => {
   const { guildId, typeId } = req.params;
 
   if (!hasGuildAccess(req, guildId)) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const appType = ApplicationType.get(typeId);
-  if (!appType || appType.guildId !== guildId) {
-    return res.status(404).json({ error: 'Application type not found' });
-  }
+  try {
+    const appType = await ApplicationType.get(typeId);
+    if (!appType || appType.guildId !== guildId) {
+      return res.status(404).json({ error: 'Application type not found' });
+    }
 
-  const questions = appType.getQuestions();
-  res.json(questions);
+    const questions = await appType.getQuestions();
+    res.json(questions);
+  } catch (error) {
+    console.error('Failed to get questions:', error);
+    res.status(500).json({ error: 'Failed to get questions' });
+  }
 });
 
 // Add question to application type
-router.post('/guild/:guildId/application-types/:typeId/questions', requireAuth, (req, res) => {
+router.post('/guild/:guildId/application-types/:typeId/questions', requireAuth, async (req, res) => {
   const { guildId, typeId } = req.params;
   const { question, questionType, required } = req.body;
 
@@ -610,52 +692,66 @@ router.post('/guild/:guildId/application-types/:typeId/questions', requireAuth, 
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const appType = ApplicationType.get(typeId);
-  if (!appType || appType.guildId !== guildId) {
-    return res.status(404).json({ error: 'Application type not found' });
+  try {
+    const appType = await ApplicationType.get(typeId);
+    if (!appType || appType.guildId !== guildId) {
+      return res.status(404).json({ error: 'Application type not found' });
+    }
+
+    const questions = await appType.getQuestions();
+    if (questions.length >= 5) {
+      return res.status(400).json({ error: 'Maximum 5 questions allowed' });
+    }
+
+    const id = await appType.addQuestion({
+      question,
+      question_type: questionType || 'short',
+      required: required !== false,
+      order_num: questions.length + 1
+    });
+
+    res.json({ success: true, id });
+  } catch (error) {
+    console.error('Failed to add question:', error);
+    res.status(500).json({ error: 'Failed to add question' });
   }
-
-  const questions = appType.getQuestions();
-  if (questions.length >= 5) {
-    return res.status(400).json({ error: 'Maximum 5 questions allowed' });
-  }
-
-  const id = appType.addQuestion({
-    question,
-    question_type: questionType || 'short',
-    required: required !== false,
-    order_num: questions.length + 1
-  });
-
-  res.json({ success: true, id });
 });
 
 // Delete question
-router.delete('/guild/:guildId/application-types/:typeId/questions/:questionId', requireAuth, (req, res) => {
+router.delete('/guild/:guildId/application-types/:typeId/questions/:questionId', requireAuth, async (req, res) => {
   const { guildId, typeId, questionId } = req.params;
 
   if (!hasGuildAccess(req, guildId)) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  db.deleteQuestion(questionId);
-
-  res.json({ success: true });
+  try {
+    await db.deleteQuestion(questionId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to delete question:', error);
+    res.status(500).json({ error: 'Failed to delete question' });
+  }
 });
 
 // Blacklist management
-router.get('/guild/:guildId/blacklist', requireAuth, (req, res) => {
+router.get('/guild/:guildId/blacklist', requireAuth, async (req, res) => {
   const { guildId } = req.params;
 
   if (!hasGuildAccess(req, guildId)) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const blacklist = db.db.prepare('SELECT * FROM ticket_blacklist WHERE guild_id = ?').all(guildId);
-  res.json(blacklist);
+  try {
+    const result = await db.query('SELECT * FROM ticket_blacklist WHERE guild_id = $1', [guildId]);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Failed to get blacklist:', error);
+    res.status(500).json({ error: 'Failed to get blacklist' });
+  }
 });
 
-router.post('/guild/:guildId/blacklist', requireAuth, (req, res) => {
+router.post('/guild/:guildId/blacklist', requireAuth, async (req, res) => {
   const { guildId } = req.params;
   const { userId, reason } = req.body;
 
@@ -663,21 +759,29 @@ router.post('/guild/:guildId/blacklist', requireAuth, (req, res) => {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  db.addToBlacklist(guildId, userId, reason || 'No reason provided');
-
-  res.json({ success: true });
+  try {
+    await db.addToBlacklist(guildId, userId, reason || 'No reason provided');
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to add to blacklist:', error);
+    res.status(500).json({ error: 'Failed to add to blacklist' });
+  }
 });
 
-router.delete('/guild/:guildId/blacklist/:userId', requireAuth, (req, res) => {
+router.delete('/guild/:guildId/blacklist/:userId', requireAuth, async (req, res) => {
   const { guildId, userId } = req.params;
 
   if (!hasGuildAccess(req, guildId)) {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  db.removeFromBlacklist(guildId, userId);
-
-  res.json({ success: true });
+  try {
+    await db.removeFromBlacklist(guildId, userId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to remove from blacklist:', error);
+    res.status(500).json({ error: 'Failed to remove from blacklist' });
+  }
 });
 
 module.exports = router;

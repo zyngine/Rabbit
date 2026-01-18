@@ -19,31 +19,33 @@ class Ticket {
     this.closedAt = data.closed_at;
   }
 
-  static create(data) {
-    const id = db.createTicket(data);
+  static async create(data) {
+    const id = await db.createTicket(data);
     return Ticket.getById(id);
   }
 
-  static get(channelId) {
-    const data = db.getTicket(channelId);
+  static async get(channelId) {
+    const data = await db.getTicket(channelId);
     return data ? new Ticket(data) : null;
   }
 
-  static getById(id) {
-    const data = db.getTicketById(id);
+  static async getById(id) {
+    const data = await db.getTicketById(id);
     return data ? new Ticket(data) : null;
   }
 
-  static getOpenByUser(guildId, userId) {
-    return db.getOpenTicketsByUser(guildId, userId).map(d => new Ticket(d));
+  static async getOpenByUser(guildId, userId) {
+    const tickets = await db.getOpenTicketsByUser(guildId, userId);
+    return tickets.map(d => new Ticket(d));
   }
 
-  static getOpen(guildId) {
-    return db.getOpenTickets(guildId).map(d => new Ticket(d));
+  static async getOpen(guildId) {
+    const tickets = await db.getOpenTickets(guildId);
+    return tickets.map(d => new Ticket(d));
   }
 
-  save() {
-    db.updateTicket(this.channelId, {
+  async save() {
+    await db.updateTicket(this.channelId, {
       status: this.status,
       priority: this.priority,
       claimed_by: this.claimedBy,
@@ -54,36 +56,36 @@ class Ticket {
     });
   }
 
-  claim(userId) {
+  async claim(userId) {
     this.claimedBy = userId;
-    this.save();
+    await this.save();
   }
 
-  unclaim() {
+  async unclaim() {
     this.claimedBy = null;
-    this.save();
+    await this.save();
   }
 
-  setPriority(priority) {
+  async setPriority(priority) {
     this.priority = priority;
-    this.save();
+    await this.save();
   }
 
-  close(reason = null) {
-    db.closeTicket(this.channelId, reason);
+  async close(reason = null) {
+    await db.closeTicket(this.channelId, reason);
     this.status = 'closed';
     this.closeReason = reason;
   }
 
-  setRating(rating, feedback = null) {
+  async setRating(rating, feedback = null) {
     this.rating = rating;
     this.feedback = feedback;
-    this.save();
+    await this.save();
   }
 
-  setTranscript(url) {
+  async setTranscript(url) {
     this.transcriptUrl = url;
-    this.save();
+    await this.save();
   }
 }
 

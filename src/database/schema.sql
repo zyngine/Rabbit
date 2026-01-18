@@ -8,12 +8,12 @@ CREATE TABLE IF NOT EXISTS guilds (
   ticket_limit INTEGER DEFAULT 3,
   auto_close_hours INTEGER DEFAULT 0,
   support_roles TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Ticket panels
 CREATE TABLE IF NOT EXISTS panels (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   guild_id TEXT,
   channel_id TEXT,
   message_id TEXT,
@@ -25,12 +25,12 @@ CREATE TABLE IF NOT EXISTS panels (
   category_id TEXT,
   style TEXT DEFAULT 'buttons',
   ticket_types TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Tickets
 CREATE TABLE IF NOT EXISTS tickets (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   guild_id TEXT,
   channel_id TEXT UNIQUE,
   user_id TEXT,
@@ -43,8 +43,8 @@ CREATE TABLE IF NOT EXISTS tickets (
   transcript_url TEXT,
   rating INTEGER,
   feedback TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  closed_at DATETIME
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  closed_at TIMESTAMP
 );
 
 -- Ticket blacklist
@@ -52,13 +52,13 @@ CREATE TABLE IF NOT EXISTS ticket_blacklist (
   guild_id TEXT,
   user_id TEXT,
   reason TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (guild_id, user_id)
 );
 
 -- Application types
 CREATE TABLE IF NOT EXISTS application_types (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   guild_id TEXT,
   name TEXT,
   description TEXT,
@@ -67,37 +67,35 @@ CREATE TABLE IF NOT EXISTS application_types (
   review_roles TEXT,
   log_channel TEXT,
   cooldown_hours INTEGER DEFAULT 24,
-  create_ticket INTEGER DEFAULT 1,
-  active INTEGER DEFAULT 1,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  create_ticket BOOLEAN DEFAULT true,
+  active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Application questions
 CREATE TABLE IF NOT EXISTS application_questions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  application_type_id INTEGER,
+  id SERIAL PRIMARY KEY,
+  application_type_id INTEGER REFERENCES application_types(id) ON DELETE CASCADE,
   question TEXT,
   question_type TEXT,
   choices TEXT,
-  required INTEGER DEFAULT 1,
-  order_num INTEGER,
-  FOREIGN KEY (application_type_id) REFERENCES application_types(id) ON DELETE CASCADE
+  required BOOLEAN DEFAULT true,
+  order_num INTEGER
 );
 
 -- Applications (submissions)
 CREATE TABLE IF NOT EXISTS applications (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   guild_id TEXT,
-  application_type_id INTEGER,
+  application_type_id INTEGER REFERENCES application_types(id),
   user_id TEXT,
   answers TEXT,
   status TEXT DEFAULT 'pending',
   reviewed_by TEXT,
   review_reason TEXT,
   ticket_channel_id TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  reviewed_at DATETIME,
-  FOREIGN KEY (application_type_id) REFERENCES application_types(id)
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  reviewed_at TIMESTAMP
 );
 
 -- Create indexes for better query performance

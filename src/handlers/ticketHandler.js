@@ -9,9 +9,8 @@ const db = require('../database/db');
 const Ticket = require('../models/Ticket');
 const Guild = require('../models/Guild');
 const embeds = require('../utils/embeds');
-const { getTicketPermissions, isSupport } = require('../utils/permissions');
+const { isSupport } = require('../utils/permissions');
 const { generateTranscript } = require('../utils/transcript');
-const config = require('../config');
 const logger = require('../utils/logger');
 
 async function handleTicketCreate(interaction, panelType = null) {
@@ -19,8 +18,8 @@ async function handleTicketCreate(interaction, panelType = null) {
 
   await interaction.deferReply({ ephemeral: true });
 
-  const guildSettings = Guild.getOrCreate(guild.id);
-  const panel = db.getPanel(message.id);
+  const guildSettings = await Guild.getOrCreate(guild.id);
+  const panel = await db.getPanel(message.id);
 
   if (!panel) {
     return interaction.editReply({
@@ -31,21 +30,21 @@ async function handleTicketCreate(interaction, panelType = null) {
   // Use the panelType passed in (from button customId or select menu value)
   const ticketType = panelType || panel.panel_type;
 
-  const blacklisted = db.isBlacklisted(guild.id, user.id);
+  const blacklisted = await db.isBlacklisted(guild.id, user.id);
   if (blacklisted) {
     return interaction.editReply({
       embeds: [embeds.error(`You are blacklisted from creating tickets. Reason: ${blacklisted.reason || 'No reason provided'}`)]
     });
   }
 
-  const openTickets = Ticket.getOpenByUser(guild.id, user.id);
+  const openTickets = await Ticket.getOpenByUser(guild.id, user.id);
   if (openTickets.length >= guildSettings.ticketLimit) {
     return interaction.editReply({
       embeds: [embeds.error(`You can only have ${guildSettings.ticketLimit} open ticket(s) at a time.`)]
     });
   }
 
-  const ticketNumber = guildSettings.incrementTicketCounter();
+  const ticketNumber = await guildSettings.incrementTicketCounter();
   const channelName = `ticket-${ticketNumber}`;
 
   const supportRoles = guildSettings.supportRoles;
@@ -88,7 +87,7 @@ async function handleTicketCreate(interaction, panelType = null) {
       permissionOverwrites
     });
 
-    const ticket = Ticket.create({
+    const ticket = await Ticket.create({
       guild_id: guild.id,
       channel_id: channel.id,
       user_id: user.id,
@@ -137,7 +136,7 @@ async function handleTicketCreate(interaction, panelType = null) {
 async function handleTicketClose(interaction, reason = null) {
   const { channel, user, guild } = interaction;
 
-  const ticket = Ticket.get(channel.id);
+  const ticket = await Ticket.get(channel.id);
   if (!ticket) {
     return interaction.reply({
       embeds: [embeds.error('This is not a ticket channel.')],
@@ -154,12 +153,12 @@ async function handleTicketClose(interaction, reason = null) {
 
   await interaction.deferReply();
 
-  const guildSettings = Guild.get(guild.id);
+  const guildSettings = await Guild.get(guild.id);
 
   try {
     const { filepath, filename } = await generateTranscript(channel, ticket);
 
-    ticket.close(reason);
+    await ticket.close(reason);
 
     if (guildSettings?.ticketTranscriptChannel) {
       const transcriptChannel = guild.channels.cache.get(guildSettings.ticketTranscriptChannel);
@@ -240,7 +239,7 @@ async function handleTicketClose(interaction, reason = null) {
 async function handleTicketClaim(interaction) {
   const { channel, user, guild, member } = interaction;
 
-  const ticket = Ticket.get(channel.id);
+  const ticket = await Ticket.get(channel.id);
   if (!ticket) {
     return interaction.reply({
       embeds: [embeds.error('This is not a ticket channel.')],
@@ -248,7 +247,8 @@ async function handleTicketClaim(interaction) {
     });
   }
 
-  if (!isSupport(member, guild.id)) {
+  const canSupport = await isSupport(member, guild.id);
+  if (!canSupport) {
     return interaction.reply({
       embeds: [embeds.error('You do not have permission to claim tickets.')],
       ephemeral: true
@@ -262,7 +262,7 @@ async function handleTicketClaim(interaction) {
     });
   }
 
-  ticket.claim(user.id);
+  await ticket.claim(user.id);
 
   const newName = `claimed-${ticket.ticketNumber}`;
   await channel.setName(newName).catch(() => {});
@@ -275,10 +275,10 @@ async function handleTicketClaim(interaction) {
 }
 
 async function handleFeedback(interaction, rating) {
-  const ticket = Ticket.get(interaction.channel.id);
+  const ticket = await Ticket.get(interaction.channel.id);
   if (!ticket) return;
 
-  ticket.setRating(rating);
+  await ticket.setRating(rating);
 
   await interaction.update({
     embeds: [embeds.ticketClosed(ticket, interaction.user, ticket.closeReason), embeds.success(`Thank you for your feedback! You rated this ticket ${rating}/5 stars.`)],
@@ -297,7 +297,8 @@ async function handleFeedback(interaction, rating) {
 async function handleTicketDelete(interaction) {
   const { channel, member, guild } = interaction;
 
-  if (!isSupport(member, guild.id)) {
+  const canSupport = await isSupport(member, guild.id);
+  if (!canSupport) {
     return interaction.reply({
       embeds: [embeds.error('You do not have permission to delete tickets.')],
       ephemeral: true
@@ -314,7 +315,7 @@ async function handleTicketDelete(interaction) {
 }
 
 async function logTicketAction(guild, action, ticket, user, channel, extra = {}) {
-  const guildSettings = Guild.get(guild.id);
+  const guildSettings = await Guild.get(guild.id);
   if (!guildSettings?.ticketLogChannel) return;
 
   const logChannel = guild.channels.cache.get(guildSettings.ticketLogChannel);

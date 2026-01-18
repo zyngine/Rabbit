@@ -21,7 +21,7 @@ module.exports = {
         )),
 
   async execute(interaction) {
-    const ticket = Ticket.get(interaction.channel.id);
+    const ticket = await Ticket.get(interaction.channel.id);
 
     if (!ticket) {
       return interaction.reply({
@@ -30,7 +30,7 @@ module.exports = {
       });
     }
 
-    if (!isSupport(interaction.member, interaction.guild.id)) {
+    if (!(await isSupport(interaction.member, interaction.guild.id))) {
       return interaction.reply({
         embeds: [embeds.error('You do not have permission to set ticket priority.')],
         ephemeral: true
@@ -39,7 +39,7 @@ module.exports = {
 
     const level = interaction.options.getString('level');
     const oldPriority = ticket.priority;
-    ticket.setPriority(level);
+    await ticket.setPriority(level);
 
     const priorityInfo = config.priorities[level];
 

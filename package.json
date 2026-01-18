@@ -19,10 +19,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "better-sqlite3": "^9.4.3",
     "discord.js": "^14.14.1",
     "dotenv": "^16.4.1",
     "express": "^4.18.2",
-    "express-session": "^1.17.3"
+    "express-session": "^1.17.3",
+    "pg": "^8.11.3"
   }
 }

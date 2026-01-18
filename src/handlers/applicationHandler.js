@@ -17,7 +17,7 @@ const { canReviewApplication } = require('../utils/permissions');
 const logger = require('../utils/logger');
 
 async function handleApplicationStart(interaction, applicationTypeId) {
-  const appType = ApplicationType.get(applicationTypeId);
+  const appType = await ApplicationType.get(applicationTypeId);
 
   if (!appType || !appType.active) {
     return interaction.reply({
@@ -26,7 +26,7 @@ async function handleApplicationStart(interaction, applicationTypeId) {
     });
   }
 
-  const questions = appType.getQuestions();
+  const questions = await appType.getQuestions();
   if (questions.length === 0) {
     return interaction.reply({
       embeds: [embeds.error('This application has no questions configured.')],
@@ -34,7 +34,7 @@ async function handleApplicationStart(interaction, applicationTypeId) {
     });
   }
 
-  const recentApps = Application.getByUser(interaction.guild.id, interaction.user.id, applicationTypeId);
+  const recentApps = await Application.getByUser(interaction.guild.id, interaction.user.id, applicationTypeId);
   if (recentApps.length > 0) {
     const lastApp = recentApps[0];
     const cooldownMs = appType.cooldownHours * 60 * 60 * 1000;
@@ -72,14 +72,14 @@ async function handleApplicationStart(interaction, applicationTypeId) {
 async function handleApplicationSubmit(interaction, applicationTypeId) {
   await interaction.deferReply({ ephemeral: true });
 
-  const appType = ApplicationType.get(applicationTypeId);
+  const appType = await ApplicationType.get(applicationTypeId);
   if (!appType) {
     return interaction.editReply({
       embeds: [embeds.error('This application type no longer exists.')]
     });
   }
 
-  const questions = appType.getQuestions();
+  const questions = await appType.getQuestions();
   const answers = {};
 
   for (const q of questions.slice(0, 5)) {
@@ -90,8 +90,8 @@ async function handleApplicationSubmit(interaction, applicationTypeId) {
   let ticketChannelId = null;
 
   if (appType.createTicket) {
-    const guildSettings = Guild.getOrCreate(interaction.guild.id);
-    const ticketNumber = guildSettings.incrementTicketCounter();
+    const guildSettings = await Guild.getOrCreate(interaction.guild.id);
+    const ticketNumber = await guildSettings.incrementTicketCounter();
     const channelName = `app-${appType.name.toLowerCase().replace(/\s+/g, '-')}-${ticketNumber}`;
 
     const supportRoles = guildSettings.supportRoles;
@@ -135,7 +135,7 @@ async function handleApplicationSubmit(interaction, applicationTypeId) {
 
       ticketChannelId = channel.id;
 
-      Ticket.create({
+      await Ticket.create({
         guild_id: interaction.guild.id,
         channel_id: channel.id,
         user_id: interaction.user.id,
@@ -177,7 +177,7 @@ async function handleApplicationSubmit(interaction, applicationTypeId) {
     }
   }
 
-  const application = Application.create({
+  const application = await Application.create({
     guild_id: interaction.guild.id,
     application_type_id: applicationTypeId,
     user_id: interaction.user.id,
@@ -202,7 +202,7 @@ async function handleApplicationSubmit(interaction, applicationTypeId) {
 async function handleApplicationAccept(interaction, applicationTypeId, userId, reason) {
   const { guild, member, user } = interaction;
 
-  const appType = ApplicationType.get(applicationTypeId);
+  const appType = await ApplicationType.get(applicationTypeId);
   if (!appType) {
     return interaction.reply({
       embeds: [embeds.error('Application type not found.')],
@@ -217,7 +217,7 @@ async function handleApplicationAccept(interaction, applicationTypeId, userId, r
     });
   }
 
-  const ticket = Ticket.get(interaction.channel.id);
+  const ticket = await Ticket.get(interaction.channel.id);
   if (!ticket) {
     return interaction.reply({
       embeds: [embeds.error('Could not find associated application.')],
@@ -225,7 +225,7 @@ async function handleApplicationAccept(interaction, applicationTypeId, userId, r
     });
   }
 
-  const applications = Application.getByUser(guild.id, ticket.userId, applicationTypeId);
+  const applications = await Application.getByUser(guild.id, ticket.userId, applicationTypeId);
   const application = applications.find(a => a.ticketChannelId === interaction.channel.id);
 
   if (!application) {
@@ -242,7 +242,7 @@ async function handleApplicationAccept(interaction, applicationTypeId, userId, r
     });
   }
 
-  application.accept(user.id, reason);
+  await application.accept(user.id, reason);
 
   const applicant = await guild.members.fetch(ticket.userId).catch(() => null);
   if (applicant) {
@@ -272,7 +272,7 @@ async function handleApplicationAccept(interaction, applicationTypeId, userId, r
 async function handleApplicationDeny(interaction, applicationTypeId, userId, reason) {
   const { guild, member, user } = interaction;
 
-  const appType = ApplicationType.get(applicationTypeId);
+  const appType = await ApplicationType.get(applicationTypeId);
   if (!appType) {
     return interaction.reply({
       embeds: [embeds.error('Application type not found.')],
@@ -287,7 +287,7 @@ async function handleApplicationDeny(interaction, applicationTypeId, userId, rea
     });
   }
 
-  const ticket = Ticket.get(interaction.channel.id);
+  const ticket = await Ticket.get(interaction.channel.id);
   if (!ticket) {
     return interaction.reply({
       embeds: [embeds.error('Could not find associated application.')],
@@ -295,7 +295,7 @@ async function handleApplicationDeny(interaction, applicationTypeId, userId, rea
     });
   }
 
-  const applications = Application.getByUser(guild.id, ticket.userId, applicationTypeId);
+  const applications = await Application.getByUser(guild.id, ticket.userId, applicationTypeId);
   const application = applications.find(a => a.ticketChannelId === interaction.channel.id);
 
   if (!application) {
@@ -312,7 +312,7 @@ async function handleApplicationDeny(interaction, applicationTypeId, userId, rea
     });
   }
 
-  application.deny(user.id, reason);
+  await application.deny(user.id, reason);
 
   const applicant = await guild.members.fetch(ticket.userId).catch(() => null);
   if (applicant) {

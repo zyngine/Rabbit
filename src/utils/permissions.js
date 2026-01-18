@@ -5,24 +5,24 @@ function isAdmin(member) {
   return member.permissions.has(PermissionFlagsBits.Administrator);
 }
 
-function isSupport(member, guildId) {
+async function isSupport(member, guildId) {
   if (isAdmin(member)) return true;
 
-  const guild = db.getGuild(guildId);
+  const guild = await db.getGuild(guildId);
   if (!guild || !guild.support_roles) return false;
 
   const supportRoles = JSON.parse(guild.support_roles);
   return member.roles.cache.some(role => supportRoles.includes(role.id));
 }
 
-function canManageTicket(member, ticket) {
+async function canManageTicket(member, ticket) {
   if (isAdmin(member)) return true;
-  if (isSupport(member, ticket.guild_id)) return true;
+  if (await isSupport(member, ticket.guild_id)) return true;
   return ticket.user_id === member.id;
 }
 
-function canClaimTicket(member, ticket) {
-  if (!isSupport(member, ticket.guild_id)) return false;
+async function canClaimTicket(member, ticket) {
+  if (!(await isSupport(member, ticket.guild_id))) return false;
   return !ticket.claimed_by || ticket.claimed_by === member.id || isAdmin(member);
 }
 

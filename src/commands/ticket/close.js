@@ -14,7 +14,7 @@ module.exports = {
         .setRequired(false)),
 
   async execute(interaction) {
-    const ticket = Ticket.get(interaction.channel.id);
+    const ticket = await Ticket.get(interaction.channel.id);
 
     if (!ticket) {
       return interaction.reply({
@@ -23,7 +23,7 @@ module.exports = {
       });
     }
 
-    if (!canManageTicket(interaction.member, ticket)) {
+    if (!(await canManageTicket(interaction.member, ticket))) {
       return interaction.reply({
         embeds: [embeds.error('You do not have permission to close this ticket.')],
         ephemeral: true

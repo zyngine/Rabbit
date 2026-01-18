@@ -45,7 +45,7 @@ module.exports = {
     const cooldown = interaction.options.getInteger('cooldown') ?? 24;
     const createTicket = interaction.options.getBoolean('create_ticket') ?? true;
 
-    const existing = ApplicationType.getByName(interaction.guild.id, name);
+    const existing = await ApplicationType.getByName(interaction.guild.id, name);
     if (existing) {
       return interaction.reply({
         embeds: [embeds.error(`An application type named "${name}" already exists.`)],
@@ -53,7 +53,7 @@ module.exports = {
       });
     }
 
-    const appType = ApplicationType.create({
+    const appType = await ApplicationType.create({
       guild_id: interaction.guild.id,
       name,
       description,

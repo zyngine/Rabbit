@@ -93,7 +93,7 @@ module.exports = {
             .setRequired(true))),
 
   async execute(interaction) {
-    const guild = Guild.getOrCreate(interaction.guild.id);
+    const guild = await Guild.getOrCreate(interaction.guild.id);
     const subcommand = interaction.options.getSubcommand();
 
     switch (subcommand) {
@@ -117,7 +117,7 @@ module.exports = {
       case 'logs': {
         const channel = interaction.options.getChannel('channel');
         guild.ticketLogChannel = channel.id;
-        guild.save();
+        await guild.save();
         return interaction.reply({
           embeds: [embeds.success(`Log channel set to ${channel}.`)]
         });
@@ -126,7 +126,7 @@ module.exports = {
       case 'transcripts': {
         const channel = interaction.options.getChannel('channel');
         guild.ticketTranscriptChannel = channel.id;
-        guild.save();
+        await guild.save();
         return interaction.reply({
           embeds: [embeds.success(`Transcript channel set to ${channel}.`)]
         });
@@ -135,7 +135,7 @@ module.exports = {
       case 'category': {
         const category = interaction.options.getChannel('category');
         guild.ticketCategory = category.id;
-        guild.save();
+        await guild.save();
         return interaction.reply({
           embeds: [embeds.success(`Default ticket category set to ${category}.`)]
         });
@@ -144,7 +144,7 @@ module.exports = {
       case 'limit': {
         const limit = interaction.options.getInteger('limit');
         guild.ticketLimit = limit;
-        guild.save();
+        await guild.save();
         return interaction.reply({
           embeds: [embeds.success(`Ticket limit set to ${limit} per user.`)]
         });
@@ -153,7 +153,7 @@ module.exports = {
       case 'autoclose': {
         const hours = interaction.options.getInteger('hours');
         guild.autoCloseHours = hours;
-        guild.save();
+        await guild.save();
         return interaction.reply({
           embeds: [embeds.success(hours > 0 ? `Auto-close set to ${hours} hours of inactivity.` : 'Auto-close has been disabled.')]
         });
@@ -167,7 +167,7 @@ module.exports = {
             ephemeral: true
           });
         }
-        guild.addSupportRole(role.id);
+        await guild.addSupportRole(role.id);
         return interaction.reply({
           embeds: [embeds.success(`${role} has been added as a support role.`)]
         });
@@ -181,7 +181,7 @@ module.exports = {
             ephemeral: true
           });
         }
-        guild.removeSupportRole(role.id);
+        await guild.removeSupportRole(role.id);
         return interaction.reply({
           embeds: [embeds.success(`${role} has been removed from support roles.`)]
         });
@@ -190,7 +190,7 @@ module.exports = {
       case 'blacklist': {
         const user = interaction.options.getUser('user');
         const reason = interaction.options.getString('reason') || 'No reason provided';
-        db.addToBlacklist(interaction.guild.id, user.id, reason);
+        await db.addToBlacklist(interaction.guild.id, user.id, reason);
         return interaction.reply({
           embeds: [embeds.success(`${user} has been blacklisted from creating tickets.`)]
         });
@@ -198,7 +198,7 @@ module.exports = {
 
       case 'unblacklist': {
         const user = interaction.options.getUser('user');
-        db.removeFromBlacklist(interaction.guild.id, user.id);
+        await db.removeFromBlacklist(interaction.guild.id, user.id);
         return interaction.reply({
           embeds: [embeds.success(`${user} has been removed from the blacklist.`)]
         });

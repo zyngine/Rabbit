@@ -75,7 +75,7 @@ module.exports = {
 
     switch (subcommand) {
       case 'list': {
-        const appTypes = ApplicationType.getAll(interaction.guild.id);
+        const appTypes = await ApplicationType.getAll(interaction.guild.id);
 
         if (appTypes.length === 0) {
           return interaction.reply({
@@ -84,20 +84,26 @@ module.exports = {
           });
         }
 
+        const descriptions = [];
+        for (const a of appTypes) {
+          const questions = await a.getQuestions();
+          descriptions.push(
+            `**${a.name}** ${a.active ? '✅' : '❌'}\n` +
+            `Questions: ${questions.length} | Cooldown: ${a.cooldownHours}h`
+          );
+        }
+
         const embed = new EmbedBuilder()
           .setColor(config.colors.primary)
           .setTitle('Application Types')
-          .setDescription(appTypes.map(a =>
-            `**${a.name}** ${a.active ? '✅' : '❌'}\n` +
-            `Questions: ${a.getQuestions().length} | Cooldown: ${a.cooldownHours}h`
-          ).join('\n\n'));
+          .setDescription(descriptions.join('\n\n'));
 
         return interaction.reply({ embeds: [embed] });
       }
 
       case 'view': {
         const appName = interaction.options.getString('application');
-        const appType = ApplicationType.getByName(interaction.guild.id, appName);
+        const appType = await ApplicationType.getByName(interaction.guild.id, appName);
 
         if (!appType) {
           return interaction.reply({
@@ -106,7 +112,7 @@ module.exports = {
           });
         }
 
-        const questions = appType.getQuestions();
+        const questions = await appType.getQuestions();
         const embed = new EmbedBuilder()
           .setColor(config.colors.primary)
           .setTitle(`Application: ${appType.name}`)
@@ -125,7 +131,7 @@ module.exports = {
 
       case 'panel': {
         const appName = interaction.options.getString('application');
-        const appType = ApplicationType.getByName(interaction.guild.id, appName);
+        const appType = await ApplicationType.getByName(interaction.guild.id, appName);
 
         if (!appType) {
           return interaction.reply({
@@ -134,7 +140,7 @@ module.exports = {
           });
         }
 
-        const questions = appType.getQuestions();
+        const questions = await appType.getQuestions();
         if (questions.length === 0) {
           return interaction.reply({
             embeds: [embeds.error('This application has no questions. Add questions first with `/appquestions add`.')],
@@ -157,7 +163,7 @@ module.exports = {
 
         appType.channelId = interaction.channel.id;
         appType.messageId = message.id;
-        appType.save();
+        await appType.save();
 
         await interaction.reply({
           embeds: [embeds.success('Application panel deployed!')],
@@ -169,7 +175,7 @@ module.exports = {
       case 'addrole': {
         const appName = interaction.options.getString('application');
         const role = interaction.options.getRole('role');
-        const appType = ApplicationType.getByName(interaction.guild.id, appName);
+        const appType = await ApplicationType.getByName(interaction.guild.id, appName);
 
         if (!appType) {
           return interaction.reply({
@@ -186,7 +192,7 @@ module.exports = {
         }
 
         appType.reviewRoles.push(role.id);
-        appType.save();
+        await appType.save();
 
         return interaction.reply({
           embeds: [embeds.success(`${role} can now review "${appName}" applications.`)]
@@ -196,7 +202,7 @@ module.exports = {
       case 'removerole': {
         const appName = interaction.options.getString('application');
         const role = interaction.options.getRole('role');
-        const appType = ApplicationType.getByName(interaction.guild.id, appName);
+        const appType = await ApplicationType.getByName(interaction.guild.id, appName);
 
         if (!appType) {
           return interaction.reply({
@@ -213,7 +219,7 @@ module.exports = {
         }
 
         appType.reviewRoles = appType.reviewRoles.filter(id => id !== role.id);
-        appType.save();
+        await appType.save();
 
         return interaction.reply({
           embeds: [embeds.success(`${role} has been removed from review roles.`)]
@@ -222,7 +228,7 @@ module.exports = {
 
       case 'toggle': {
         const appName = interaction.options.getString('application');
-        const appType = ApplicationType.getByName(interaction.guild.id, appName);
+        const appType = await ApplicationType.getByName(interaction.guild.id, appName);
 
         if (!appType) {
           return interaction.reply({
@@ -232,7 +238,7 @@ module.exports = {
         }
 
         appType.active = !appType.active;
-        appType.save();
+        await appType.save();
 
         return interaction.reply({
           embeds: [embeds.success(`"${appName}" has been ${appType.active ? 'enabled' : 'disabled'}.`)]
@@ -241,7 +247,7 @@ module.exports = {
 
       case 'delete': {
         const appName = interaction.options.getString('application');
-        const appType = ApplicationType.getByName(interaction.guild.id, appName);
+        const appType = await ApplicationType.getByName(interaction.guild.id, appName);
 
         if (!appType) {
           return interaction.reply({
@@ -250,7 +256,7 @@ module.exports = {
           });
         }
 
-        appType.delete();
+        await appType.delete();
 
         return interaction.reply({
           embeds: [embeds.success(`Application type "${appName}" has been deleted.`)]

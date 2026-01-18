@@ -20,7 +20,7 @@ module.exports = {
     const args = message.content.slice(PREFIX.length).trim().split(/ +/);
     const command = args.shift().toLowerCase();
 
-    const ticket = Ticket.get(message.channel.id);
+    const ticket = await Ticket.get(message.channel.id);
 
     switch (command) {
       case 'rename':
@@ -48,7 +48,7 @@ async function handleRename(message, args, ticket) {
     return;
   }
 
-  if (!isSupport(message.member, message.guild.id) && ticket.userId !== message.author.id) {
+  if (!(await isSupport(message.member, message.guild.id)) && ticket.userId !== message.author.id) {
     const reply = await message.channel.send({
       embeds: [embeds.error('You do not have permission to rename this ticket.')]
     });
@@ -108,7 +108,7 @@ async function handleClose(message, args, ticket) {
     return;
   }
 
-  if (!isSupport(message.member, message.guild.id) && ticket.userId !== message.author.id) {
+  if (!(await isSupport(message.member, message.guild.id)) && ticket.userId !== message.author.id) {
     const reply = await message.channel.send({
       embeds: [embeds.error('You do not have permission to close this ticket.')]
     });
@@ -127,9 +127,9 @@ async function handleClose(message, args, ticket) {
     const { filepath, filename } = await generateTranscript(message.channel, ticket);
 
     // Close the ticket in database
-    ticket.close(reason);
+    await ticket.close(reason);
 
-    const guildSettings = Guild.get(message.guild.id);
+    const guildSettings = await Guild.get(message.guild.id);
 
     // Send transcript to transcript channel
     if (guildSettings?.ticketTranscriptChannel) {
@@ -204,7 +204,7 @@ async function handleDelete(message, ticket) {
     return;
   }
 
-  if (!isSupport(message.member, message.guild.id)) {
+  if (!(await isSupport(message.member, message.guild.id))) {
     await message.delete().catch(() => {});
     const reply = await message.channel.send({
       embeds: [embeds.error('You do not have permission to delete tickets.')]
@@ -222,7 +222,7 @@ async function handleDelete(message, ticket) {
     const { filepath, filename } = await generateTranscript(message.channel, ticket);
 
     // Close the ticket in database
-    ticket.close('Deleted via $delete command');
+    await ticket.close('Deleted via $delete command');
 
     // Send transcript to ticket creator
     const ticketUser = await message.guild.members.fetch(ticket.userId).catch(() => null);
@@ -238,7 +238,7 @@ async function handleDelete(message, ticket) {
     }
 
     // Send to transcript channel if configured
-    const guildSettings = Guild.get(message.guild.id);
+    const guildSettings = await Guild.get(message.guild.id);
     if (guildSettings?.ticketTranscriptChannel) {
       const transcriptChannel = message.guild.channels.cache.get(guildSettings.ticketTranscriptChannel);
       if (transcriptChannel) {

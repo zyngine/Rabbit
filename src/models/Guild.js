@@ -13,22 +13,22 @@ class Guild {
     this.createdAt = data.created_at;
   }
 
-  static get(guildId) {
-    const data = db.getGuild(guildId);
+  static async get(guildId) {
+    const data = await db.getGuild(guildId);
     return data ? new Guild(data) : null;
   }
 
-  static getOrCreate(guildId) {
-    let guild = Guild.get(guildId);
-    if (!guild) {
-      db.createGuild(guildId);
-      guild = Guild.get(guildId);
+  static async getOrCreate(guildId) {
+    let data = await db.getGuild(guildId);
+    if (!data) {
+      await db.createGuild(guildId);
+      data = await db.getGuild(guildId);
     }
-    return guild;
+    return new Guild(data);
   }
 
-  save() {
-    db.updateGuild(this.guildId, {
+  async save() {
+    await db.updateGuild(this.guildId, {
       ticket_log_channel: this.ticketLogChannel,
       ticket_transcript_channel: this.ticketTranscriptChannel,
       ticket_category: this.ticketCategory,
@@ -38,20 +38,22 @@ class Guild {
     });
   }
 
-  addSupportRole(roleId) {
+  async addSupportRole(roleId) {
     if (!this.supportRoles.includes(roleId)) {
       this.supportRoles.push(roleId);
-      this.save();
+      await this.save();
     }
   }
 
-  removeSupportRole(roleId) {
+  async removeSupportRole(roleId) {
     this.supportRoles = this.supportRoles.filter(id => id !== roleId);
-    this.save();
+    await this.save();
   }
 
-  incrementTicketCounter() {
-    return db.incrementTicketCounter(this.guildId);
+  async incrementTicketCounter() {
+    const counter = await db.incrementTicketCounter(this.guildId);
+    this.ticketCounter = counter;
+    return counter;
   }
 }
 

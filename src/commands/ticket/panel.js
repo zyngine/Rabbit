@@ -56,7 +56,7 @@ module.exports = {
     const buttonColor = interaction.options.getString('button_color') || 'primary';
     const category = interaction.options.getChannel('category');
 
-    Guild.getOrCreate(interaction.guild.id);
+    await Guild.getOrCreate(interaction.guild.id);
 
     const buttonStyles = {
       primary: ButtonStyle.Primary,
@@ -80,7 +80,7 @@ module.exports = {
       components: [row]
     });
 
-    db.createPanel({
+    await db.createPanel({
       guild_id: interaction.guild.id,
       channel_id: interaction.channel.id,
       message_id: message.id,

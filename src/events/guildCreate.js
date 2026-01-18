@@ -9,7 +9,7 @@ module.exports = {
   async execute(guild) {
     logger.info(`Joined new guild: ${guild.name} (${guild.id})`);
 
-    Guild.getOrCreate(guild.id);
+    await Guild.getOrCreate(guild.id);
 
     logger.success(`Initialized settings for ${guild.name}`);
   }

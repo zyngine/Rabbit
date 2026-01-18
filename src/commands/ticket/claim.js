@@ -10,7 +10,7 @@ module.exports = {
     .setDescription('Claim the current ticket'),
 
   async execute(interaction) {
-    const ticket = Ticket.get(interaction.channel.id);
+    const ticket = await Ticket.get(interaction.channel.id);
 
     if (!ticket) {
       return interaction.reply({
@@ -19,7 +19,7 @@ module.exports = {
       });
     }
 
-    if (!isSupport(interaction.member, interaction.guild.id)) {
+    if (!(await isSupport(interaction.member, interaction.guild.id))) {
       return interaction.reply({
         embeds: [embeds.error('You do not have permission to claim tickets.')],
         ephemeral: true
@@ -39,7 +39,7 @@ module.exports = {
       });
     }
 
-    ticket.claim(interaction.user.id);
+    await ticket.claim(interaction.user.id);
 
     const newName = `claimed-${ticket.ticketNumber}`;
     await interaction.channel.setName(newName).catch(() => {});

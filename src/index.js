@@ -27,7 +27,7 @@ async function main() {
   startServer();
 
   try {
-    initializeDatabase();
+    await initializeDatabase();
 
     const commands = await loadCommands(client);
     loadEvents(client);

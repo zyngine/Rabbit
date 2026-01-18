@@ -59,7 +59,7 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
     const appName = interaction.options.getString('application');
 
-    const appType = ApplicationType.getByName(interaction.guild.id, appName);
+    const appType = await ApplicationType.getByName(interaction.guild.id, appName);
     if (!appType) {
       return interaction.reply({
         embeds: [embeds.error(`Application type "${appName}" not found.`)],
@@ -69,7 +69,7 @@ module.exports = {
 
     switch (subcommand) {
       case 'add': {
-        const questions = appType.getQuestions();
+        const questions = await appType.getQuestions();
         if (questions.length >= 5) {
           return interaction.reply({
             embeds: [embeds.error('Applications can have a maximum of 5 questions (Discord modal limit).')],
@@ -81,7 +81,7 @@ module.exports = {
         const type = interaction.options.getString('type');
         const required = interaction.options.getBoolean('required') ?? true;
 
-        appType.addQuestion({
+        await appType.addQuestion({
           question,
           question_type: type,
           required,
@@ -94,7 +94,7 @@ module.exports = {
       }
 
       case 'remove': {
-        const questions = appType.getQuestions();
+        const questions = await appType.getQuestions();
         const number = interaction.options.getInteger('number');
 
         if (number < 1 || number > questions.length) {
@@ -105,11 +105,11 @@ module.exports = {
         }
 
         const questionToRemove = questions[number - 1];
-        db.deleteQuestion(questionToRemove.id);
+        await db.deleteQuestion(questionToRemove.id);
 
-        questions.slice(number).forEach((q, index) => {
-          db.updateQuestion(q.id, { order_num: number + index });
-        });
+        for (const q of questions.slice(number)) {
+          await db.updateQuestion(q.id, { order_num: number + questions.slice(number).indexOf(q) });
+        }
 
         return interaction.reply({
           embeds: [embeds.success(`Question ${number} has been removed from "${appName}".`)]
@@ -117,7 +117,7 @@ module.exports = {
       }
 
       case 'list': {
-        const questions = appType.getQuestions();
+        const questions = await appType.getQuestions();
 
         if (questions.length === 0) {
           return interaction.reply({

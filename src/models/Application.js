@@ -16,30 +16,31 @@ class ApplicationType {
     this.createdAt = data.created_at;
   }
 
-  static create(data) {
-    const id = db.createApplicationType({
+  static async create(data) {
+    const id = await db.createApplicationType({
       ...data,
       review_roles: JSON.stringify(data.reviewRoles || [])
     });
     return ApplicationType.get(id);
   }
 
-  static get(id) {
-    const data = db.getApplicationType(id);
+  static async get(id) {
+    const data = await db.getApplicationType(id);
     return data ? new ApplicationType(data) : null;
   }
 
-  static getByName(guildId, name) {
-    const data = db.getApplicationTypeByName(guildId, name);
+  static async getByName(guildId, name) {
+    const data = await db.getApplicationTypeByName(guildId, name);
     return data ? new ApplicationType(data) : null;
   }
 
-  static getAll(guildId) {
-    return db.getApplicationTypes(guildId).map(d => new ApplicationType(d));
+  static async getAll(guildId) {
+    const types = await db.getApplicationTypes(guildId);
+    return types.map(d => new ApplicationType(d));
   }
 
-  save() {
-    db.updateApplicationType(this.id, {
+  async save() {
+    await db.updateApplicationType(this.id, {
       name: this.name,
       description: this.description,
       channel_id: this.channelId,
@@ -47,20 +48,20 @@ class ApplicationType {
       review_roles: JSON.stringify(this.reviewRoles),
       log_channel: this.logChannel,
       cooldown_hours: this.cooldownHours,
-      create_ticket: this.createTicket ? 1 : 0,
-      active: this.active ? 1 : 0
+      create_ticket: this.createTicket,
+      active: this.active
     });
   }
 
-  delete() {
-    db.deleteApplicationType(this.id);
+  async delete() {
+    await db.deleteApplicationType(this.id);
   }
 
-  getQuestions() {
+  async getQuestions() {
     return db.getQuestions(this.id);
   }
 
-  addQuestion(data) {
+  async addQuestion(data) {
     return db.addQuestion({
       application_type_id: this.id,
       ...data
@@ -83,28 +84,28 @@ class Application {
     this.reviewedAt = data.reviewed_at;
   }
 
-  static create(data) {
-    const id = db.createApplication(data);
+  static async create(data) {
+    const id = await db.createApplication(data);
     return Application.get(id);
   }
 
-  static get(id) {
-    const data = db.getApplication(id);
+  static async get(id) {
+    const data = await db.getApplication(id);
     return data ? new Application(data) : null;
   }
 
-  static getByUser(guildId, userId, applicationTypeId) {
-    return db.getApplicationsByUser(guildId, userId, applicationTypeId)
-      .map(d => new Application(d));
+  static async getByUser(guildId, userId, applicationTypeId) {
+    const apps = await db.getApplicationsByUser(guildId, userId, applicationTypeId);
+    return apps.map(d => new Application(d));
   }
 
-  static getPending(guildId, applicationTypeId) {
-    return db.getPendingApplications(guildId, applicationTypeId)
-      .map(d => new Application(d));
+  static async getPending(guildId, applicationTypeId) {
+    const apps = await db.getPendingApplications(guildId, applicationTypeId);
+    return apps.map(d => new Application(d));
   }
 
-  save() {
-    db.updateApplication(this.id, {
+  async save() {
+    await db.updateApplication(this.id, {
       answers: JSON.stringify(this.answers),
       status: this.status,
       reviewed_by: this.reviewedBy,
@@ -113,22 +114,23 @@ class Application {
     });
   }
 
-  accept(reviewerId, reason = null) {
-    db.reviewApplication(this.id, reviewerId, 'accepted', reason);
+  async accept(reviewerId, reason = null) {
+    await db.reviewApplication(this.id, reviewerId, 'accepted', reason);
     this.status = 'accepted';
     this.reviewedBy = reviewerId;
     this.reviewReason = reason;
   }
 
-  deny(reviewerId, reason = null) {
-    db.reviewApplication(this.id, reviewerId, 'denied', reason);
+  async deny(reviewerId, reason = null) {
+    await db.reviewApplication(this.id, reviewerId, 'denied', reason);
     this.status = 'denied';
     this.reviewedBy = reviewerId;
     this.reviewReason = reason;
   }
 
-  canApply(cooldownHours) {
-    const lastApp = Application.getByUser(this.guildId, this.userId, this.applicationTypeId)[0];
+  async canApply(cooldownHours) {
+    const apps = await Application.getByUser(this.guildId, this.userId, this.applicationTypeId);
+    const lastApp = apps[0];
     if (!lastApp) return true;
 
     const cooldownMs = cooldownHours * 60 * 60 * 1000;
