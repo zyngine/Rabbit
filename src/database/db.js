@@ -201,7 +201,7 @@ async function createApplicationType(data) {
   const result = await pool.query(
     `INSERT INTO application_types (guild_id, name, description, review_roles, log_channel, cooldown_hours, create_ticket, pending_role, accepted_role, denied_role)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-    [data.guild_id, data.name, data.description, data.review_roles || '[]', data.log_channel, data.cooldown_hours || 24, data.create_ticket !== false, data.pending_role || null, data.accepted_role || null, data.denied_role || null]
+    [data.guild_id, data.name, data.description, data.review_roles || '[]', data.log_channel, data.cooldown_hours || 24, data.create_ticket !== false, data.pending_roles || '[]', data.accepted_roles || '[]', data.denied_roles || '[]']
   );
   return result.rows[0].id;
 }

@@ -665,27 +665,45 @@ async function renderAppTypesTab(types) {
         </label>
         <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
           <h4 style="margin-bottom: 12px; font-size: 14px;">Auto-Assign Roles</h4>
-          <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">Automatically assign roles based on application status</p>
+          <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">Automatically assign roles based on application status (up to 2 per status)</p>
           <div class="form-group">
             <label style="font-size: 12px;">On Submit (Pending)</label>
-            <select id="app-pending-role" class="input">
-              <option value="">None</option>
-              ${roleOptions}
-            </select>
+            <div style="display: flex; gap: 8px;">
+              <select id="app-pending-role-1" class="input">
+                <option value="">None</option>
+                ${roleOptions}
+              </select>
+              <select id="app-pending-role-2" class="input">
+                <option value="">None</option>
+                ${roleOptions}
+              </select>
+            </div>
           </div>
           <div class="form-group">
             <label style="font-size: 12px;">On Accept</label>
-            <select id="app-accepted-role" class="input">
-              <option value="">None</option>
-              ${roleOptions}
-            </select>
+            <div style="display: flex; gap: 8px;">
+              <select id="app-accepted-role-1" class="input">
+                <option value="">None</option>
+                ${roleOptions}
+              </select>
+              <select id="app-accepted-role-2" class="input">
+                <option value="">None</option>
+                ${roleOptions}
+              </select>
+            </div>
           </div>
           <div class="form-group">
             <label style="font-size: 12px;">On Deny</label>
-            <select id="app-denied-role" class="input">
-              <option value="">None</option>
-              ${roleOptions}
-            </select>
+            <div style="display: flex; gap: 8px;">
+              <select id="app-denied-role-1" class="input">
+                <option value="">None</option>
+                ${roleOptions}
+              </select>
+              <select id="app-denied-role-2" class="input">
+                <option value="">None</option>
+                ${roleOptions}
+              </select>
+            </div>
           </div>
         </div>
         <div class="modal-actions">
@@ -1088,9 +1106,20 @@ async function createAppType() {
   const description = document.getElementById('app-description').value;
   const cooldownHours = parseInt(document.getElementById('app-cooldown').value) || 24;
   const createTicket = document.getElementById('app-create-ticket').checked;
-  const pendingRole = document.getElementById('app-pending-role').value || null;
-  const acceptedRole = document.getElementById('app-accepted-role').value || null;
-  const deniedRole = document.getElementById('app-denied-role').value || null;
+
+  // Collect roles as arrays (filter out empty values)
+  const pendingRoles = [
+    document.getElementById('app-pending-role-1').value,
+    document.getElementById('app-pending-role-2').value
+  ].filter(r => r);
+  const acceptedRoles = [
+    document.getElementById('app-accepted-role-1').value,
+    document.getElementById('app-accepted-role-2').value
+  ].filter(r => r);
+  const deniedRoles = [
+    document.getElementById('app-denied-role-1').value,
+    document.getElementById('app-denied-role-2').value
+  ].filter(r => r);
 
   if (!name) return alert('Please enter a name');
 
@@ -1098,7 +1127,7 @@ async function createAppType() {
     const response = await fetch(`/api/guild/${currentGuild.id}/application-types`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description, cooldownHours, createTicket, pendingRole, acceptedRole, deniedRole })
+      body: JSON.stringify({ name, description, cooldownHours, createTicket, pendingRoles, acceptedRoles, deniedRoles })
     });
 
     const result = await response.json();
@@ -1112,9 +1141,12 @@ async function createAppType() {
     document.getElementById('app-description').value = '';
     document.getElementById('app-cooldown').value = '24';
     document.getElementById('app-create-ticket').checked = true;
-    document.getElementById('app-pending-role').value = '';
-    document.getElementById('app-accepted-role').value = '';
-    document.getElementById('app-denied-role').value = '';
+    document.getElementById('app-pending-role-1').value = '';
+    document.getElementById('app-pending-role-2').value = '';
+    document.getElementById('app-accepted-role-1').value = '';
+    document.getElementById('app-accepted-role-2').value = '';
+    document.getElementById('app-denied-role-1').value = '';
+    document.getElementById('app-denied-role-2').value = '';
 
     hideModal('create-app-modal');
     loadApplications();

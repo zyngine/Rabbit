@@ -185,16 +185,18 @@ async function handleApplicationSubmit(interaction, applicationTypeId) {
     ticket_channel_id: ticketChannelId
   });
 
-  // Assign pending role if configured
-  if (appType.pendingRole) {
+  // Assign pending roles if configured
+  if (appType.pendingRoles && appType.pendingRoles.length > 0) {
     try {
       const member = await interaction.guild.members.fetch(interaction.user.id);
-      const role = interaction.guild.roles.cache.get(appType.pendingRole);
-      if (role && role.position < interaction.guild.members.me.roles.highest.position) {
-        await member.roles.add(role);
+      for (const roleId of appType.pendingRoles) {
+        const role = interaction.guild.roles.cache.get(roleId);
+        if (role && role.position < interaction.guild.members.me.roles.highest.position) {
+          await member.roles.add(role);
+        }
       }
     } catch (e) {
-      logger.warn(`Could not assign pending role to ${interaction.user.id}: ${e.message}`);
+      logger.warn(`Could not assign pending roles to ${interaction.user.id}: ${e.message}`);
     }
   }
 
@@ -261,18 +263,22 @@ async function handleApplicationAccept(interaction, applicationTypeId, userId, r
   if (applicant) {
     // Handle role assignments
     try {
-      // Remove pending role if exists
-      if (appType.pendingRole) {
-        const pendingRole = guild.roles.cache.get(appType.pendingRole);
-        if (pendingRole && applicant.roles.cache.has(pendingRole.id)) {
-          await applicant.roles.remove(pendingRole);
+      // Remove pending roles if any
+      if (appType.pendingRoles && appType.pendingRoles.length > 0) {
+        for (const roleId of appType.pendingRoles) {
+          const pendingRole = guild.roles.cache.get(roleId);
+          if (pendingRole && applicant.roles.cache.has(pendingRole.id)) {
+            await applicant.roles.remove(pendingRole);
+          }
         }
       }
-      // Add accepted role if configured
-      if (appType.acceptedRole) {
-        const acceptedRole = guild.roles.cache.get(appType.acceptedRole);
-        if (acceptedRole && acceptedRole.position < guild.members.me.roles.highest.position) {
-          await applicant.roles.add(acceptedRole);
+      // Add accepted roles if configured
+      if (appType.acceptedRoles && appType.acceptedRoles.length > 0) {
+        for (const roleId of appType.acceptedRoles) {
+          const acceptedRole = guild.roles.cache.get(roleId);
+          if (acceptedRole && acceptedRole.position < guild.members.me.roles.highest.position) {
+            await applicant.roles.add(acceptedRole);
+          }
         }
       }
     } catch (e) {
@@ -351,18 +357,22 @@ async function handleApplicationDeny(interaction, applicationTypeId, userId, rea
   if (applicant) {
     // Handle role assignments
     try {
-      // Remove pending role if exists
-      if (appType.pendingRole) {
-        const pendingRole = guild.roles.cache.get(appType.pendingRole);
-        if (pendingRole && applicant.roles.cache.has(pendingRole.id)) {
-          await applicant.roles.remove(pendingRole);
+      // Remove pending roles if any
+      if (appType.pendingRoles && appType.pendingRoles.length > 0) {
+        for (const roleId of appType.pendingRoles) {
+          const pendingRole = guild.roles.cache.get(roleId);
+          if (pendingRole && applicant.roles.cache.has(pendingRole.id)) {
+            await applicant.roles.remove(pendingRole);
+          }
         }
       }
-      // Add denied role if configured
-      if (appType.deniedRole) {
-        const deniedRole = guild.roles.cache.get(appType.deniedRole);
-        if (deniedRole && deniedRole.position < guild.members.me.roles.highest.position) {
-          await applicant.roles.add(deniedRole);
+      // Add denied roles if configured
+      if (appType.deniedRoles && appType.deniedRoles.length > 0) {
+        for (const roleId of appType.deniedRoles) {
+          const deniedRole = guild.roles.cache.get(roleId);
+          if (deniedRole && deniedRole.position < guild.members.me.roles.highest.position) {
+            await applicant.roles.add(deniedRole);
+          }
         }
       }
     } catch (e) {

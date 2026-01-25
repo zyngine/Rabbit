@@ -13,10 +13,22 @@ class ApplicationType {
     this.cooldownHours = data.cooldown_hours || 24;
     this.createTicket = Boolean(data.create_ticket);
     this.active = Boolean(data.active);
-    this.pendingRole = data.pending_role;
-    this.acceptedRole = data.accepted_role;
-    this.deniedRole = data.denied_role;
+    // Parse role fields as arrays (supports both old single-value and new array format)
+    this.pendingRoles = this.parseRoles(data.pending_role);
+    this.acceptedRoles = this.parseRoles(data.accepted_role);
+    this.deniedRoles = this.parseRoles(data.denied_role);
     this.createdAt = data.created_at;
+  }
+
+  parseRoles(value) {
+    if (!value) return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [value];
+    } catch {
+      // Old format: single role ID string
+      return [value];
+    }
   }
 
   static async create(data) {
