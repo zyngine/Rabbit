@@ -54,11 +54,73 @@ async function handleApplicationStart(interaction, applicationTypeId) {
     .setCustomId(`application_submit_${applicationTypeId}`)
     .setTitle(appType.name.substring(0, 45));
 
-  for (const q of modalQuestions) {
+  for (let i = 0; i < modalQuestions.length; i++) {
+    const q = modalQuestions[i];
     const style = q.question_type === 'paragraph' ? TextInputStyle.Paragraph : TextInputStyle.Short;
+
+    // Use numbered label and put full question in placeholder (up to 100 chars)
+    const label = `Question ${i + 1}${q.required ? '' : ' (Optional)'}`;
+    const placeholder = q.question.length > 100 ? q.question.substring(0, 97) + '...' : q.question;
+
     const input = new TextInputBuilder()
       .setCustomId(`q_${q.id}`)
-      .setLabel(q.question.substring(0, 45))
+      .setLabel(label)
+      .setPlaceholder(placeholder)
+      .setStyle(style)
+      .setRequired(Boolean(q.required))
+      .setMaxLength(q.question_type === 'paragraph' ? 1000 : 100);
+
+    modal.addComponents(new ActionRowBuilder().addComponents(input));
+  }
+
+  // Show questions preview embed before modal
+  const questionsPreview = modalQuestions.map((q, i) =>
+    `**Question ${i + 1}:**\n${q.question}`
+  ).join('\n\n');
+
+  await interaction.reply({
+    embeds: [embeds.applicationQuestions(appType.name, questionsPreview)],
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`app_open_modal_${applicationTypeId}`)
+          .setLabel('Start Application')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('📝')
+      )
+    ],
+    ephemeral: true
+  });
+}
+
+async function handleApplicationModal(interaction, applicationTypeId) {
+  const appType = await ApplicationType.get(applicationTypeId);
+
+  if (!appType || !appType.active) {
+    return interaction.reply({
+      embeds: [embeds.error('This application is no longer available.')],
+      ephemeral: true
+    });
+  }
+
+  const questions = await appType.getQuestions();
+  const modalQuestions = questions.slice(0, 5);
+
+  const modal = new ModalBuilder()
+    .setCustomId(`application_submit_${applicationTypeId}`)
+    .setTitle(appType.name.substring(0, 45));
+
+  for (let i = 0; i < modalQuestions.length; i++) {
+    const q = modalQuestions[i];
+    const style = q.question_type === 'paragraph' ? TextInputStyle.Paragraph : TextInputStyle.Short;
+
+    const label = `Question ${i + 1}${q.required ? '' : ' (Optional)'}`;
+    const placeholder = q.question.length > 100 ? q.question.substring(0, 97) + '...' : q.question;
+
+    const input = new TextInputBuilder()
+      .setCustomId(`q_${q.id}`)
+      .setLabel(label)
+      .setPlaceholder(placeholder)
       .setStyle(style)
       .setRequired(Boolean(q.required))
       .setMaxLength(q.question_type === 'paragraph' ? 1000 : 100);
@@ -404,6 +466,7 @@ async function handleApplicationDeny(interaction, applicationTypeId, userId, rea
 
 module.exports = {
   handleApplicationStart,
+  handleApplicationModal,
   handleApplicationSubmit,
   handleApplicationAccept,
   handleApplicationDeny

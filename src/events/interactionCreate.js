@@ -10,6 +10,7 @@ const {
 } = require('../handlers/ticketHandler');
 const {
   handleApplicationStart,
+  handleApplicationModal,
   handleApplicationSubmit,
   handleApplicationAccept,
   handleApplicationDeny
@@ -81,6 +82,9 @@ async function handleButton(interaction) {
   } else if (customId.startsWith('application_start_')) {
     const appTypeId = parseInt(customId.replace('application_start_', ''));
     await handleApplicationStart(interaction, appTypeId);
+  } else if (customId.startsWith('app_open_modal_')) {
+    const appTypeId = parseInt(customId.replace('app_open_modal_', ''));
+    await handleApplicationModal(interaction, appTypeId);
   } else if (customId.startsWith('app_accept_')) {
     const appTypeId = parseInt(customId.replace('app_accept_', ''));
     await handleApplicationAccept(interaction, appTypeId, null, null);

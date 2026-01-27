@@ -128,6 +128,14 @@ function feedbackPrompt(ticketNumber) {
     .setFooter({ text: 'Click a button below to rate' });
 }
 
+function applicationQuestions(appName, questionsText) {
+  return new EmbedBuilder()
+    .setColor(config.colors.primary)
+    .setTitle(`${appName}`)
+    .setDescription(`Please review the questions below, then click **Start Application** to begin.\n\n${questionsText}`)
+    .setFooter({ text: 'Answer each question in the form that appears' });
+}
+
 module.exports = {
   ticketWelcome,
   ticketClosed,
@@ -136,6 +144,7 @@ module.exports = {
   applicationPanel,
   applicationSubmission,
   applicationResult,
+  applicationQuestions,
   success,
   error,
   warning,
