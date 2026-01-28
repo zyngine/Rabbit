@@ -16,6 +16,19 @@ const embeds = require('../utils/embeds');
 const { canReviewApplication } = require('../utils/permissions');
 const logger = require('../utils/logger');
 
+// Temporary storage for multi-page application answers (cleared after 30 min)
+const pendingApplications = new Map();
+
+// Clean up old pending applications every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, data] of pendingApplications) {
+    if (now - data.timestamp > 30 * 60 * 1000) {
+      pendingApplications.delete(key);
+    }
+  }
+}, 10 * 60 * 1000);
+
 async function handleApplicationStart(interaction, applicationTypeId) {
   const appType = await ApplicationType.get(applicationTypeId);
 
@@ -49,41 +62,23 @@ async function handleApplicationStart(interaction, applicationTypeId) {
     }
   }
 
-  const modalQuestions = questions.slice(0, 5);
-  const modal = new ModalBuilder()
-    .setCustomId(`application_submit_${applicationTypeId}`)
-    .setTitle(appType.name.substring(0, 45));
-
-  for (let i = 0; i < modalQuestions.length; i++) {
-    const q = modalQuestions[i];
-    const style = q.question_type === 'paragraph' ? TextInputStyle.Paragraph : TextInputStyle.Short;
-
-    // Use numbered label and put full question in placeholder (up to 100 chars)
-    const label = `Question ${i + 1}${q.required ? '' : ' (Optional)'}`;
-    const placeholder = q.question.length > 100 ? q.question.substring(0, 97) + '...' : q.question;
-
-    const input = new TextInputBuilder()
-      .setCustomId(`q_${q.id}`)
-      .setLabel(label)
-      .setPlaceholder(placeholder)
-      .setStyle(style)
-      .setRequired(Boolean(q.required))
-      .setMaxLength(q.question_type === 'paragraph' ? 1000 : 100);
-
-    modal.addComponents(new ActionRowBuilder().addComponents(input));
-  }
+  // Show all questions (up to 10) in preview
+  const allQuestions = questions.slice(0, 10);
+  const totalPages = Math.ceil(allQuestions.length / 5);
 
   // Show questions preview embed before modal
-  const questionsPreview = modalQuestions.map((q, i) =>
+  const questionsPreview = allQuestions.map((q, i) =>
     `**Question ${i + 1}:**\n${q.question}`
   ).join('\n\n');
 
+  const pageInfo = totalPages > 1 ? `\n\n*This application has ${allQuestions.length} questions across ${totalPages} pages.*` : '';
+
   await interaction.reply({
-    embeds: [embeds.applicationQuestions(appType.name, questionsPreview)],
+    embeds: [embeds.applicationQuestions(appType.name, questionsPreview + pageInfo)],
     components: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId(`app_open_modal_${applicationTypeId}`)
+          .setCustomId(`app_open_modal_${applicationTypeId}_1`)
           .setLabel('Start Application')
           .setStyle(ButtonStyle.Primary)
           .setEmoji('📝')
@@ -93,7 +88,7 @@ async function handleApplicationStart(interaction, applicationTypeId) {
   });
 }
 
-async function handleApplicationModal(interaction, applicationTypeId) {
+async function handleApplicationModal(interaction, applicationTypeId, page = 1) {
   const appType = await ApplicationType.get(applicationTypeId);
 
   if (!appType || !appType.active) {
@@ -104,17 +99,27 @@ async function handleApplicationModal(interaction, applicationTypeId) {
   }
 
   const questions = await appType.getQuestions();
-  const modalQuestions = questions.slice(0, 5);
+  const allQuestions = questions.slice(0, 10);
+  const totalPages = Math.ceil(allQuestions.length / 5);
+
+  // Get questions for this page (0-4 for page 1, 5-9 for page 2)
+  const startIdx = (page - 1) * 5;
+  const pageQuestions = allQuestions.slice(startIdx, startIdx + 5);
+
+  const modalTitle = totalPages > 1
+    ? `${appType.name.substring(0, 35)} (${page}/${totalPages})`
+    : appType.name.substring(0, 45);
 
   const modal = new ModalBuilder()
-    .setCustomId(`application_submit_${applicationTypeId}`)
-    .setTitle(appType.name.substring(0, 45));
+    .setCustomId(`application_submit_${applicationTypeId}_${page}`)
+    .setTitle(modalTitle);
 
-  for (let i = 0; i < modalQuestions.length; i++) {
-    const q = modalQuestions[i];
+  for (let i = 0; i < pageQuestions.length; i++) {
+    const q = pageQuestions[i];
+    const questionNum = startIdx + i + 1;
     const style = q.question_type === 'paragraph' ? TextInputStyle.Paragraph : TextInputStyle.Short;
 
-    const label = `Question ${i + 1}${q.required ? '' : ' (Optional)'}`;
+    const label = `Question ${questionNum}${q.required ? '' : ' (Optional)'}`;
     const placeholder = q.question.length > 100 ? q.question.substring(0, 97) + '...' : q.question;
 
     const input = new TextInputBuilder()
@@ -123,7 +128,7 @@ async function handleApplicationModal(interaction, applicationTypeId) {
       .setPlaceholder(placeholder)
       .setStyle(style)
       .setRequired(Boolean(q.required))
-      .setMaxLength(q.question_type === 'paragraph' ? 1000 : 100);
+      .setMaxLength(q.question_type === 'paragraph' ? 4000 : 1000);
 
     modal.addComponents(new ActionRowBuilder().addComponents(input));
   }
@@ -131,23 +136,63 @@ async function handleApplicationModal(interaction, applicationTypeId) {
   await interaction.showModal(modal);
 }
 
-async function handleApplicationSubmit(interaction, applicationTypeId) {
-  await interaction.deferReply({ ephemeral: true });
-
+async function handleApplicationSubmit(interaction, applicationTypeId, page = 1) {
   const appType = await ApplicationType.get(applicationTypeId);
   if (!appType) {
-    return interaction.editReply({
-      embeds: [embeds.error('This application type no longer exists.')]
+    return interaction.reply({
+      embeds: [embeds.error('This application type no longer exists.')],
+      ephemeral: true
     });
   }
 
   const questions = await appType.getQuestions();
-  const answers = {};
+  const allQuestions = questions.slice(0, 10);
+  const totalPages = Math.ceil(allQuestions.length / 5);
 
-  for (const q of questions.slice(0, 5)) {
+  // Get questions for this page
+  const startIdx = (page - 1) * 5;
+  const pageQuestions = allQuestions.slice(startIdx, startIdx + 5);
+
+  // Collect answers from this page
+  const pageAnswers = {};
+  for (const q of pageQuestions) {
     const answer = interaction.fields.getTextInputValue(`q_${q.id}`);
-    answers[q.id] = answer;
+    pageAnswers[q.id] = answer;
   }
+
+  const pendingKey = `${interaction.user.id}_${applicationTypeId}`;
+
+  // If there are more pages, save answers and show continue button
+  if (page < totalPages) {
+    // Save answers for later
+    const existing = pendingApplications.get(pendingKey) || { answers: {}, timestamp: Date.now() };
+    existing.answers = { ...existing.answers, ...pageAnswers };
+    existing.timestamp = Date.now();
+    pendingApplications.set(pendingKey, existing);
+
+    return interaction.reply({
+      embeds: [embeds.success(`Page ${page} of ${totalPages} completed! Click below to continue to the next page.`)],
+      components: [
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`app_open_modal_${applicationTypeId}_${page + 1}`)
+            .setLabel(`Continue to Page ${page + 1}`)
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji('➡️')
+        )
+      ],
+      ephemeral: true
+    });
+  }
+
+  // Final page - combine all answers and submit
+  await interaction.deferReply({ ephemeral: true });
+
+  const existingData = pendingApplications.get(pendingKey);
+  const answers = existingData ? { ...existingData.answers, ...pageAnswers } : pageAnswers;
+
+  // Clean up pending data
+  pendingApplications.delete(pendingKey);
 
   let ticketChannelId = null;
 

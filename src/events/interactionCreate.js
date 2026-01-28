@@ -83,8 +83,11 @@ async function handleButton(interaction) {
     const appTypeId = parseInt(customId.replace('application_start_', ''));
     await handleApplicationStart(interaction, appTypeId);
   } else if (customId.startsWith('app_open_modal_')) {
-    const appTypeId = parseInt(customId.replace('app_open_modal_', ''));
-    await handleApplicationModal(interaction, appTypeId);
+    // Format: app_open_modal_{appTypeId}_{page}
+    const parts = customId.replace('app_open_modal_', '').split('_');
+    const appTypeId = parseInt(parts[0]);
+    const page = parseInt(parts[1]) || 1;
+    await handleApplicationModal(interaction, appTypeId, page);
   } else if (customId.startsWith('app_accept_')) {
     const appTypeId = parseInt(customId.replace('app_accept_', ''));
     await handleApplicationAccept(interaction, appTypeId, null, null);
@@ -100,8 +103,11 @@ async function handleModal(interaction) {
   logger.info(`Modal: ${customId} by ${interaction.user.tag}`);
 
   if (customId.startsWith('application_submit_')) {
-    const appTypeId = parseInt(customId.replace('application_submit_', ''));
-    await handleApplicationSubmit(interaction, appTypeId);
+    // Format: application_submit_{appTypeId}_{page}
+    const parts = customId.replace('application_submit_', '').split('_');
+    const appTypeId = parseInt(parts[0]);
+    const page = parseInt(parts[1]) || 1;
+    await handleApplicationSubmit(interaction, appTypeId, page);
   }
 }
 

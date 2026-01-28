@@ -746,8 +746,8 @@ router.post('/guild/:guildId/application-types/:typeId/questions', requireAuth, 
     }
 
     const questions = await appType.getQuestions();
-    if (questions.length >= 5) {
-      return res.status(400).json({ error: 'Maximum 5 questions allowed' });
+    if (questions.length >= 10) {
+      return res.status(400).json({ error: 'Maximum 10 questions allowed' });
     }
 
     const id = await appType.addQuestion({

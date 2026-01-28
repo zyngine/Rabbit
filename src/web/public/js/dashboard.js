@@ -632,7 +632,7 @@ async function renderAppTypesTab(types) {
                 <h4 style="margin-bottom: 4px;">${type.name} ${type.active ? '<span class="badge badge-open">Active</span>' : '<span class="badge badge-closed">Inactive</span>'}</h4>
                 <p style="color: var(--text-secondary); font-size: 14px;">${type.description || 'No description'}</p>
                 <p style="color: var(--text-secondary); font-size: 12px; margin-top: 8px;">
-                  Questions: ${type.questionCount}/5 | Cooldown: ${type.cooldownHours}h | Creates Ticket: ${type.createTicket ? 'Yes' : 'No'}
+                  Questions: ${type.questionCount}/10 | Cooldown: ${type.cooldownHours}h | Creates Ticket: ${type.createTicket ? 'Yes' : 'No'}
                 </p>
               </div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
